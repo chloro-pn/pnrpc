@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <cstring>
 
 template<typename RequestType>
 struct RequestCreator {

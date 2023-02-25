@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+# no UTHREAD, no TEST
+cc_library(
+  name = "asio",
+  hdrs = glob(["asio/include/**/*.hpp", "asio/include/**/*.ipp"]),
+  includes = ["asio/include"],
+)

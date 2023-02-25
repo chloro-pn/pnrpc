@@ -5,6 +5,10 @@ cc_library(
   hdrs = glob(["include/**/*.h"]),
   srcs = glob(["src/*.cc"]),
   includes = ["include"],
+  deps = [
+    "@bridge//:bridge",
+    "@asio//:asio",
+  ]
 )
 
 cc_binary(

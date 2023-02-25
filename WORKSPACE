@@ -18,3 +18,10 @@ new_git_repository(
     commit = "04885f0a59f9a848a67d43d6be2bb9ad2e32d739",
     build_file = "//third_party:async_simple.build",
 )
+
+new_git_repository(
+  name = "asio",
+  remote = "https://github.com/chriskohlhoff/asio",
+  tag = "asio-1-24-0",
+  build_file = "//third_party:asio.build",
+)

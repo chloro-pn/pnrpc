@@ -10,6 +10,7 @@
 
 #include "pnrpc/rpc_request_creator.h"
 #include "pnrpc/rpc_response_creator.h"
+#include "pnrpc/util.h"
 
 class RpcProcessorBase {
  public:
@@ -19,7 +20,7 @@ class RpcProcessorBase {
 
   virtual void create_request_from_raw_bytes(const char* ptr, size_t len) = 0;
   virtual int process() = 0;
-  virtual std::vector<char> create_response_to_raw_btes() = 0;
+  virtual std::string create_response_to_raw_btes() = 0;
 
   size_t get_pcode() const { return code; }
 
@@ -43,12 +44,35 @@ class RpcServer {
     funcs_[pcode] = std::move(cf);
   }
 
+  std::string HandleRequest(const char* ptr, size_t len) {
+    if (len <= sizeof(uint32_t)) {
+      std::cerr << "invalid net packet." << std::endl;
+      return "";
+    }
+    uint32_t pcode = ParsePcode(ptr, len);
+    auto processor = GetProcessor(pcode);
+    if (processor == nullptr) {
+      std::cerr << "invalid rpc request : " << pcode << std::endl;
+      return "";
+    }
+    processor->create_request_from_raw_bytes(ptr, len - sizeof(uint32_t));
+    processor->process();
+    std::string ret = processor->create_response_to_raw_btes();
+    return ret;
+  }
+
   std::unique_ptr<RpcProcessorBase> GetProcessor(size_t pcode) {
     auto it = funcs_.find(pcode);
     if (it == funcs_.end()) {
       return nullptr;
     }
     return it->second(pcode);
+  }
+
+  uint32_t ParsePcode(const char*& ptr, size_t len) const {
+    size_t pcode = integralParse<uint32_t>(ptr, len);
+    ptr += sizeof(uint32_t);
+    return static_cast<uint32_t>(pcode);
   }
 
  private:
@@ -71,8 +95,8 @@ class RpcProcessor : public RpcProcessorBase {
 
   virtual int process() = 0;
 
-  std::vector<char> create_response_to_raw_btes() override {
-    std::vector<char> ret = ResponseCreator<response_t>::to_raw_bytes(*response);
+  std::string create_response_to_raw_btes() override {
+    std::string ret = ResponseCreator<response_t>::to_raw_bytes(*response);
     return ret;
   }
 
@@ -95,9 +119,8 @@ class RpcStub {
 
   std::string create_request_message() {
     std::string ret;
-    ret.resize(sizeof(uint32_t));
-    // todo 考虑网络大小端问题
-    *reinterpret_cast<uint32_t*>(&ret[0]) = static_cast<uint32_t>(code);
+    uint32_t pcode = static_cast<uint32_t>(code);
+    integralSeri(pcode, ret);
     RequestCreator<request_t>::to_raw_bytes(*request, ret);
     return ret;
   }
