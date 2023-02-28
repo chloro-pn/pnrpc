@@ -6,8 +6,6 @@
 #include <string>
 #include <memory>
 
-#include <iostream>
-
 struct RPC_add_request_type {
   std::string str;
   uint32_t age;
@@ -38,3 +36,5 @@ struct RPC_add_request_type {
 RPC_DECLARE(desc, RPC_add_request_type, std::string, 0x00)
 
 RPC_DECLARE(num_add, uint32_t, uint32_t, 0x01)
+
+RPC_DECLARE(async_task, std::string, std::string, 0x02)

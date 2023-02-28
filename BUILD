@@ -8,6 +8,7 @@ cc_library(
   deps = [
     "@bridge//:bridge",
     "@asio//:asio",
+    "@spdlog//:spdlog"
   ]
 )
 

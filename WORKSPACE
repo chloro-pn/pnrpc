@@ -25,3 +25,10 @@ new_git_repository(
   tag = "asio-1-24-0",
   build_file = "//third_party:asio.build",
 )
+
+new_git_repository(
+    name = "spdlog",
+    remote = "https://github.com/gabime/spdlog",
+    tag = "v1.10.0",
+    build_file = "//third_party:spdlog.build",
+)

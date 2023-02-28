@@ -4,6 +4,8 @@
 #include <string>
 #include <cstring>
 
+namespace pnrpc {
+
 template<typename RequestType>
 struct RequestCreator {
   static std::unique_ptr<RequestType> create(const char* ptr, size_t len) {
@@ -38,3 +40,5 @@ struct RequestCreator<uint32_t> {
     appender.append((const char*)&request, sizeof(request));
   }
 };
+
+}

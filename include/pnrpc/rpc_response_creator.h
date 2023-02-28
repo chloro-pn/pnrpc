@@ -5,6 +5,10 @@
 #include <cstring>
 #include <memory>
 
+#include "pnrpc/util.h"
+
+namespace pnrpc {
+
 template <typename ResponseType>
 struct ResponseCreator {
   static std::string to_raw_bytes(const ResponseType& rt) {
@@ -31,14 +35,14 @@ template <>
 struct ResponseCreator<uint32_t> {
   static std::string to_raw_bytes(const uint32_t& rt) {
     std::string ret;
-    ret.resize(sizeof(uint32_t));
-    memcpy(&ret[0], &rt, sizeof(rt));
+    integralSeri(rt, ret);
     return ret;
   }
 
   static std::unique_ptr<uint32_t> create_from_raw_bytes(const char* ptr, size_t len) {
-    uint32_t tmp;
-    memcpy(&tmp, ptr, len);
+    uint32_t tmp = integralParse<uint32_t>(ptr, len);
     return std::make_unique<uint32_t>(tmp);
   }
 };
+
+}
