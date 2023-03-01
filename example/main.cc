@@ -11,9 +11,10 @@
 using namespace pnrpc;
 
 int main() {
-  REGISTER_RPC(desc, 0x00)
-  REGISTER_RPC(num_add, 0x01)
-  REGISTER_RPC(async_task, 0x02)
+  REGISTER_RPC(Echo, 0x00)
+  REGISTER_RPC(Sleep, 0x01)
+  REGISTER_RPC(Desc, 0x02)
+  REGISTER_RPC(async_task, 0x03)
 
   NetServer ns("127.0.0.1", 44444);
   std::thread th([&]() {
@@ -22,8 +23,8 @@ int main() {
   std::this_thread::sleep_for(std::chrono::seconds(1));
   asio::io_context io;
   {
-    RPCdescSTUB client(io, "127.0.0.1", 44444);
-    auto request = std::make_unique<RPC_add_request_type>();
+    RPCDescSTUB client(io, "127.0.0.1", 44444);
+    auto request = std::make_unique<Desc_request_type>();
     request->str = "hello world";
     request->age = 25;
     request->man = 0;
@@ -31,7 +32,7 @@ int main() {
     auto ret_code = client.rpc_call(std::move(request), response);
     std::cout << ret_code << " " << *response << std::endl;
 
-    RPCnum_addSTUB c2(io, "127.0.0.1", 44444);
+    RPCSleepSTUB c2(io, "127.0.0.1", 44444);
     auto r2 = std::make_unique<uint32_t>(2);
     std::unique_ptr<uint32_t> response2 = std::make_unique<uint32_t>();
     ret_code = c2.rpc_call(std::move(r2), response2);
@@ -45,4 +46,4 @@ int main() {
   }
   th.join();
   return 0;
-} 
+}

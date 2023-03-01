@@ -1,38 +1,34 @@
 #include <string>
 #include <thread>
-
+#include <variant>
 #include <functional>
+#include <iostream>
+#include <chrono>
 
 #include "asio.hpp"
+#include <asio/experimental/awaitable_operators.hpp>
 #include "pnrpc/rpc_define.h"
+#include "pnrpc/async_task.h"
 
-asio::awaitable<void> RPCdesc::process() {
+asio::awaitable<void> RPCEcho::process() {
+  response.reset(new std::string(*request));
+  co_return;
+}
+
+asio::awaitable<void> RPCDesc::process() {
   response.reset(new std::string());
   *response = request->str + ", your age is " + std::to_string(request->age) + ", and you " + (request->man == 1 ? "are " : "are not ") + "a man";
   co_return;
 }
 
-asio::awaitable<void> RPCnum_add::process() {
-  response.reset(new uint32_t);
-  *response = *request * 10;
+asio::awaitable<void> RPCSleep::process() {
+  response.reset(new uint32_t());
+  std::chrono::seconds s(*request);
+  asio::steady_timer timer(get_io_context());
+  timer.expires_after(s);
+  co_await timer.async_wait(asio::use_awaitable);
+  *response = *request;
   co_return;
-}
-
-template <typename ReturnType>
-auto async_task(std::function<void(std::function<void(ReturnType)>&&)> request_task) {
-  auto initiate = [request_task = std::move(request_task)]<typename Handler>(Handler&& handler) mutable {
-    auto shared_handler = std::make_shared<Handler>(std::forward<Handler>(handler));
-    auto&& resume_func = 
-      [shared_handler](ReturnType rt) mutable -> void  {
-        auto ex = asio::get_associated_executor(*shared_handler);
-        asio::dispatch(ex, [shared_handler, rt = std::move(rt)]() mutable {
-          (*shared_handler)(rt);
-        });
-      };
-      request_task(std::move(resume_func));
-  };
-  auto h = asio::use_awaitable_t<>();
-  return asio::async_initiate<asio::use_awaitable_t<>, void(ReturnType)>(std::move(initiate), h);
 }
 
 struct AsyncTaskHandlerMock {
@@ -48,22 +44,39 @@ struct AsyncTaskHandlerMock {
   }
 };
 
-// 这个rpc首先将异步操作封装为一个awaiter并co_await等其完成，然后新建client请求了另一个rpc方法（client支持阻塞式和协程挂起式的rpc请求，这里使用了协程版本）
-// 所有的网络io都是非阻塞的
+using namespace asio::experimental::awaitable_operators;
+
+/*
+ * 可以无缝使用asio提供的协程基础设施（socket、timer、Error Handling、Co-ordinating Parallel Coroutines等等）；
+ * 可以将异步操作封装为awaiter并在rpc处理函数（也是一个协程）中使用；
+ * 客户端stub的rpc请求提供了协程版本，因此可以在rpc处理函数中对其他rpc服务发起调用，一切都是非阻塞的；
+ */
 asio::awaitable<void> RPCasync_task::process() {
   response.reset(new std::string());
   auto request_task = [request_str = *request](std::function<void(std::string)>&& rf) mutable -> void {
     AsyncTaskHandlerMock::Instance().push_async_task(request_str, std::move(rf));
   };
-  std::string tmp = co_await std::move(async_task<std::string>(std::move(request_task)));
+  std::string tmp = co_await pnrpc::async_task<std::string>(std::move(request_task));
   // just for test 
-  RPCnum_addSTUB client(get_io_context(), "127.0.0.1", 44444);
-  auto add_req = std::make_unique<uint32_t>(10);
+  RPCSleepSTUB client(get_io_context(), "127.0.0.1", 44444);
+  auto add_req = std::make_unique<uint32_t>(1);
   auto add_resp = std::make_unique<uint32_t>();
-  int ret_code = co_await client.rpc_call_coro(std::move(add_req), add_resp);
   *response = tmp;
-  if (ret_code == RPC_OK) {
-    *response += std::to_string(*add_resp);
+
+  asio::steady_timer timer(get_io_context());
+  timer.expires_after(std::chrono::seconds(3));
+
+  std::variant<int, std::monostate> results = co_await (
+    client.rpc_call_coro(std::move(add_req), add_resp) ||
+    timer.async_wait(asio::use_awaitable)
+  );
+  if (results.index() != 0) {
+    std::cerr << "rpc request timeout" << std::endl;
+  } else {
+    int ret_code = std::get<int>(results);
+    if (ret_code == RPC_OK) {
+      *response += std::to_string(*add_resp);
+    }
   }
   co_return;
 }

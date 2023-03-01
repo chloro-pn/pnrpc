@@ -6,13 +6,13 @@
 #include <string>
 #include <memory>
 
-struct RPC_add_request_type {
+struct Desc_request_type {
   std::string str;
   uint32_t age;
   uint32_t man;
 
-  static std::unique_ptr<RPC_add_request_type> create_from_raw_bytes(const char* ptr, size_t len) {
-    std::unique_ptr<RPC_add_request_type> ret(new RPC_add_request_type);
+  static std::unique_ptr<Desc_request_type> create_from_raw_bytes(const char* ptr, size_t len) {
+    std::unique_ptr<Desc_request_type> ret(new Desc_request_type);
     bridge::BridgePool bp;
     std::string tmp(ptr, len);
     auto root = bridge::Parse(tmp, bp);
@@ -23,7 +23,7 @@ struct RPC_add_request_type {
     return ret;
   }
 
-  static void to_raw_bytes(const RPC_add_request_type& request, std::string& appender) {
+  static void to_raw_bytes(const Desc_request_type& request, std::string& appender) {
     bridge::BridgePool bp;
     auto root = bp.map();
     root->Insert("str", bp.data(request.str));
@@ -33,8 +33,11 @@ struct RPC_add_request_type {
   }
 };
 
-RPC_DECLARE(desc, RPC_add_request_type, std::string, 0x00)
 
-RPC_DECLARE(num_add, uint32_t, uint32_t, 0x01)
+RPC_DECLARE(Echo, std::string, std::string, 0x00)
 
-RPC_DECLARE(async_task, std::string, std::string, 0x02)
+RPC_DECLARE(Sleep, uint32_t, uint32_t, 0x01)
+
+RPC_DECLARE(Desc, Desc_request_type, std::string, 0x02)
+
+RPC_DECLARE(async_task, std::string, std::string, 0x03)
