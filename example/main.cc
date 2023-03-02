@@ -16,7 +16,7 @@ int main() {
   REGISTER_RPC(Desc, 0x02)
   REGISTER_RPC(async_task, 0x03)
 
-  NetServer ns("127.0.0.1", 44444);
+  NetServer ns("127.0.0.1", 44444, 4);
   std::thread th([&]() {
     ns.run();
   });
@@ -44,6 +44,8 @@ int main() {
     ret_code = c3.rpc_call(std::move(r3), response3);
     std::cout << ret_code  << " " << *response3 << std::endl;
   }
+  io.stop();
+  ns.stop();
   th.join();
   return 0;
 }

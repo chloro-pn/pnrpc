@@ -2,6 +2,7 @@
 #include <string>
 #include <cstring>
 #include <stdexcept>
+#include <chrono>
 
 class Endian {
  public:
@@ -59,3 +60,19 @@ T integralParse(const char* ptr, size_t buf_len) {
   }
   return ret;
 }
+
+class Timer {
+ public:
+  Timer() {}
+
+  void Start() { start_ = std::chrono::system_clock::now(); }
+
+  double End() {
+    auto end = std::chrono::system_clock::now();
+    auto use_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_);
+    return use_ms.count();
+  }
+
+ private:
+  std::chrono::time_point<std::chrono::system_clock> start_;
+};
