@@ -17,6 +17,7 @@
 
 namespace pnrpc {
 
+// 由使用者保证，在RpcProcessorBase类型的对象生命周期内，running_io_总是有效的。
 class RpcProcessorBase {
  public:
   RpcProcessorBase(size_t pcode) : code(pcode), running_io_(nullptr) {
@@ -46,6 +47,13 @@ class RpcServer {
  public:
   using CreatorFunction = std::function<std::unique_ptr<RpcProcessorBase>(size_t)>;
 
+  struct HandleInfo {
+    std::string response;
+    int ret_code;
+    uint32_t pcode;
+    double process_ms;
+  };
+
   static RpcServer& Instance() {
     static RpcServer obj;
     return obj;
@@ -58,32 +66,38 @@ class RpcServer {
     funcs_[pcode] = std::move(cf);
   }
 
-  asio::awaitable<std::string> HandleRequest(const char* ptr, size_t len, asio::io_context& io) {
-    int ret_code = RPC_OK;
+  asio::awaitable<HandleInfo> HandleRequest(const char* ptr, size_t len, asio::io_context& io) {
+    HandleInfo handle_info;
+    handle_info.ret_code = RPC_OK;
+    handle_info.pcode = 0;
     std::string response;
     if (len <= sizeof(uint32_t)) {
-      ret_code = RPC_NET_ERR;
+      handle_info.ret_code = RPC_NET_ERR;
       response = "invalid net packet";
+      PNRPC_LOG_ERROR("invalid net packet");
     } else {
-      uint32_t pcode = ParsePcode(ptr, len);
-      auto processor = GetProcessor(pcode);
+      handle_info.pcode = ParsePcode(ptr, len);
+      auto processor = GetProcessor(handle_info.pcode);
       if (processor == nullptr) {
-        ret_code = RPC_INVALID_PCODE;
-        response = "not found rpc request, pcode == " + std::to_string(pcode);
+        handle_info.ret_code = RPC_INVALID_PCODE;
+        response = "not found rpc request, pcode == " + std::to_string(handle_info.pcode);
       } else {
         processor->set_io_context(io);
         processor->create_request_from_raw_bytes(ptr, len - sizeof(uint32_t));
+        Timer timer;
+        timer.Start();
         co_await processor->process();
-        ret_code = RPC_OK;
+        handle_info.process_ms = timer.End();
+        handle_info.ret_code = RPC_OK;
         response = processor->create_response_to_raw_btes();
       }
     }
     bridge::BridgePool bp;
     auto root = bp.map();
-    root->Insert("ret_code", bp.data(static_cast<int32_t>(ret_code)));
+    root->Insert("ret_code", bp.data(static_cast<int32_t>(handle_info.ret_code)));
     root->Insert("response", bp.data(std::move(response)));
-    auto ret = bridge::Serialize(std::move(root), bp);
-    co_return ret;
+    handle_info.response = bridge::Serialize(std::move(root), bp);
+    co_return handle_info;
   }
 
   std::unique_ptr<RpcProcessorBase> GetProcessor(size_t pcode) {

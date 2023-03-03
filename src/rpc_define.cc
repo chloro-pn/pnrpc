@@ -56,12 +56,11 @@ asio::awaitable<void> RPCasync_task::process() {
   auto request_task = [request_str = *request](std::function<void(std::string)>&& rf) mutable -> void {
     AsyncTaskHandlerMock::Instance().push_async_task(request_str, std::move(rf));
   };
-  std::string tmp = co_await pnrpc::async_task<std::string>(std::move(request_task));
-  // just for test 
+  *response = co_await pnrpc::async_task<std::string>(std::move(request_task));
+
   RPCSleepSTUB client(get_io_context(), "127.0.0.1", 44444);
   auto add_req = std::make_unique<uint32_t>(1);
   auto add_resp = std::make_unique<uint32_t>();
-  *response = tmp;
 
   asio::steady_timer timer(get_io_context());
   timer.expires_after(std::chrono::seconds(3));
@@ -71,11 +70,11 @@ asio::awaitable<void> RPCasync_task::process() {
     timer.async_wait(asio::use_awaitable)
   );
   if (results.index() != 0) {
-    std::cerr << "rpc request timeout" << std::endl;
+    *response += ", sleep rpc request timeout";
   } else {
     int ret_code = std::get<int>(results);
     if (ret_code == RPC_OK) {
-      *response += std::to_string(*add_resp);
+      *response += ", sleep rpc response " + std::to_string(*add_resp);
     }
   }
   co_return;
