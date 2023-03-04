@@ -38,6 +38,11 @@ class RpcProcessorBase {
 
   size_t get_pcode() const { return code; }
 
+  // 用户可以通过重写此方法将本rpc分配给自定义的handle_io处理
+  virtual asio::io_context* bind_io_context() {
+    return nullptr;
+  }
+
  private:
   size_t code;
   asio::io_context* running_io_;
@@ -83,6 +88,10 @@ class RpcServer {
         response = "not found rpc request, pcode == " + std::to_string(handle_info.pcode);
       } else {
         processor->set_io_context(io);
+        auto client_io_context = processor->bind_io_context();
+        if (client_io_context != nullptr) {
+          processor->set_io_context(*client_io_context);
+        }
         processor->create_request_from_raw_bytes(ptr, len - sizeof(uint32_t));
         Timer timer;
         timer.Start();
@@ -238,6 +247,19 @@ class RPC ## funcname : public pnrpc::RpcProcessor<request_t, response_t> { \
  public: \
   RPC ## funcname() : pnrpc::RpcProcessor<request_t, response_t>(pcode) {} \
   asio::awaitable<void> process() override; \
+}; \
+\
+class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pcode> { \
+ public: \
+  RPC ## funcname ## STUB (asio::io_context& io, const std::string& ip, uint16_t port) : pnrpc::RpcStub<request_t, response_t, pcode>(io, ip, port) {} \
+}; \
+
+#define RPC_DECLARE_BIND(funcname, request_t, response_t, pcode) \
+class RPC ## funcname : public pnrpc::RpcProcessor<request_t, response_t> { \
+ public: \
+  RPC ## funcname() : pnrpc::RpcProcessor<request_t, response_t>(pcode) {} \
+  asio::awaitable<void> process() override; \
+  asio::io_context* bind_io_context() override; \
 }; \
 \
 class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pcode> { \

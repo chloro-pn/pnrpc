@@ -25,12 +25,13 @@ asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io) {
       co_await asio::async_read(socket, asio::buffer(buf), asio::use_awaitable_t<>());
 
       auto handle_info = co_await RpcServer::Instance().HandleRequest(&buf[0], buf.size(), io);
-      PNRPC_LOG_INFO("handle request, pcode = {}, ret_code = {}, process_ms = {}, request_length = {}, response_length = {}",
+      PNRPC_LOG_INFO("handle request, pcode = {}, ret_code = {}, process_ms = {}, request_length = {}, response_length = {}, io = {}",
         handle_info.pcode,
         handle_info.ret_code,
         handle_info.process_ms,
         length,
-        handle_info.response.size());
+        handle_info.response.size(),
+        static_cast<void*>(&io));
       std::string msg;
       length = handle_info.response.size();
       integralSeri(length, msg);
