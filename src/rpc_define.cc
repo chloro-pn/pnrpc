@@ -15,12 +15,6 @@ asio::awaitable<void> RPCEcho::process() {
   co_return;
 }
 
-asio::io_context default_global_context;
-
-asio::io_context* RPCDesc::bind_io_context() {
-  return &default_global_context;
-}
-
 asio::awaitable<void> RPCDesc::process() {
   response.reset(new std::string());
   *response = request->str + ", your age is " + std::to_string(request->age) + ", and you " + (request->man == 1 ? "are " : "are not ") + "a man";

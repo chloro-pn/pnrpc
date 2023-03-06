@@ -38,7 +38,6 @@ RPC_DECLARE(Echo, std::string, std::string, 0x00)
 
 RPC_DECLARE(Sleep, uint32_t, uint32_t, 0x01)
 
-// 可以给rpc方法绑定自定义的io_context
-RPC_DECLARE_BIND(Desc, Desc_request_type, std::string, 0x02)
+RPC_DECLARE(Desc, Desc_request_type, std::string, 0x02)
 
 RPC_DECLARE(async_task, std::string, std::string, 0x03)

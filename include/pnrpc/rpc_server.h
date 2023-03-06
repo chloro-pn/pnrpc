@@ -242,11 +242,11 @@ class RpcStub {
 
 }
 
-#define RPC_DECLARE(funcname, request_t, response_t, pcode) \
+#define RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, override_functions) \
 class RPC ## funcname : public pnrpc::RpcProcessor<request_t, response_t> { \
  public: \
   RPC ## funcname() : pnrpc::RpcProcessor<request_t, response_t>(pcode) {} \
-  asio::awaitable<void> process() override; \
+  override_functions \
 }; \
 \
 class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pcode> { \
@@ -254,18 +254,19 @@ class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pco
   RPC ## funcname ## STUB (asio::io_context& io, const std::string& ip, uint16_t port) : pnrpc::RpcStub<request_t, response_t, pcode>(io, ip, port) {} \
 }; \
 
-#define RPC_DECLARE_BIND(funcname, request_t, response_t, pcode) \
-class RPC ## funcname : public pnrpc::RpcProcessor<request_t, response_t> { \
- public: \
-  RPC ## funcname() : pnrpc::RpcProcessor<request_t, response_t>(pcode) {} \
+#define OVERRIDE_BIND \
   asio::awaitable<void> process() override; \
-  asio::io_context* bind_io_context() override; \
-}; \
-\
-class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pcode> { \
- public: \
-  RPC ## funcname ## STUB (asio::io_context& io, const std::string& ip, uint16_t port) : pnrpc::RpcStub<request_t, response_t, pcode>(io, ip, port) {} \
-}; \
+  asio::io_context* bind_io_context() override;
+
+#define OVERRIDE_PROCESS \
+  asio::awaitable<void> process() override; \
+
+
+#define RPC_DECLARE_BIND(funcname, request_t, response_t, pcode) \
+  RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, OVERRIDE_BIND)
+
+#define RPC_DECLARE(funcname, request_t, response_t, pcode) \
+  RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, OVERRIDE_PROCESS)
 
 #define REGISTER_RPC(funcname, pcode) \
   pnrpc::RpcServer::Instance().RegisterRpc(pcode, [](size_t) -> std::unique_ptr<pnrpc::RpcProcessorBase> { \

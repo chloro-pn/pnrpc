@@ -79,6 +79,8 @@ class NetServer {
   NetServer(std::string ip, uint16_t port, size_t io_num = 0) : io_(), handle_io_(), ip_(ip), port_(port) {
     for(size_t i = 0; i < io_num; ++i) {
       handle_io_.emplace_back(std::make_unique<asio::io_context>());
+    }
+    for(size_t i = 0; i < io_num; ++i) {
       handle_thread_.emplace_back(std::thread([this, i]()->void {
         try {
           auto work = asio::make_work_guard(*this->handle_io_[i]);
@@ -105,11 +107,11 @@ class NetServer {
     for(auto& each : handle_io_) {
       each->stop();
     }
-    // 需要等所有handle_io_ stop之后io_才可以stop.
-    io_.stop();
     for(auto& each : handle_thread_) {
       each.join();
     }
+    // 需要等所有handle_io_ stop之后io_才可以stop.
+    io_.stop();
   }
 
   ~NetServer() {
