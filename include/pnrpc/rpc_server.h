@@ -15,6 +15,8 @@
 #include "bridge/object.h"
 #include "asio.hpp"
 
+#include "asio/dispatch.hpp"
+
 namespace pnrpc {
 
 // 由使用者保证，在RpcProcessorBase类型的对象生命周期内，running_io_总是有效的。
@@ -57,6 +59,7 @@ class RpcServer {
     int ret_code;
     uint32_t pcode;
     double process_ms;
+    asio::io_context* bind_ctx;
   };
 
   static RpcServer& Instance() {
@@ -75,6 +78,7 @@ class RpcServer {
     HandleInfo handle_info;
     handle_info.ret_code = RPC_OK;
     handle_info.pcode = 0;
+    handle_info.bind_ctx = nullptr;
     std::string response;
     if (len <= sizeof(uint32_t)) {
       handle_info.ret_code = RPC_NET_ERR;
@@ -87,10 +91,14 @@ class RpcServer {
         handle_info.ret_code = RPC_INVALID_PCODE;
         response = "not found rpc request, pcode == " + std::to_string(handle_info.pcode);
       } else {
+        handle_info.bind_ctx = &io;
         processor->set_io_context(io);
-        auto client_io_context = processor->bind_io_context();
-        if (client_io_context != nullptr) {
-          processor->set_io_context(*client_io_context);
+        auto bind_ctx = processor->bind_io_context();
+        // 如果用户给该rpc绑定了io_context，则将本协程调度给该io_context执行。
+        if (bind_ctx != nullptr) {
+          handle_info.bind_ctx = bind_ctx;
+          processor->set_io_context(*bind_ctx);
+          co_await asio::dispatch(asio::bind_executor(*bind_ctx, asio::use_awaitable));
         }
         processor->create_request_from_raw_bytes(ptr, len - sizeof(uint32_t));
         Timer timer;

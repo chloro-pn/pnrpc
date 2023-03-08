@@ -15,14 +15,24 @@ asio::awaitable<void> RPCEcho::process() {
   co_return;
 }
 
+asio::io_context global_default_ctx;
+
+asio::io_context* RPCDesc::bind_io_context() {
+  return &global_default_ctx;
+}
+
 asio::awaitable<void> RPCDesc::process() {
   response.reset(new std::string());
   *response = request->str + ", your age is " + std::to_string(request->age) + ", and you " + (request->man == 1 ? "are " : "are not ") + "a man";
-  PNRPC_LOG_INFO("my handle io's address is {}", static_cast<void*>(&get_io_context()));
   co_return;
 }
 
+asio::io_context* RPCSleep::bind_io_context() {
+  return &global_default_ctx;
+}
+
 asio::awaitable<void> RPCSleep::process() {
+  PNRPC_LOG_INFO("my handle io's address is {}", static_cast<void*>(&get_io_context()));
   response.reset(new uint32_t());
   std::chrono::seconds s(*request);
   asio::steady_timer timer(get_io_context());
@@ -78,5 +88,8 @@ asio::awaitable<void> RPCasync_task::process() {
       *response += ", sleep rpc response " + std::to_string(*add_resp);
     }
   }
+  int ret = co_await client.rpc_call_coro(std::make_unique<uint32_t>(2), add_resp);
+  if (ret == 0)
+    *response += ", sleep rpc second response " + std::to_string(*add_resp);
   co_return;
 }

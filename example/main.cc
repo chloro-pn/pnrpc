@@ -16,6 +16,16 @@ int main() {
   REGISTER_RPC(Desc, 0x02)
   REGISTER_RPC(async_task, 0x03)
 
+  std::thread ctx_th([] {
+    try {
+      auto work = asio::make_work_guard(global_default_ctx);
+      global_default_ctx.run();
+      PNRPC_LOG_INFO("global_default_ctx stop.");
+    } catch (std::exception& e) {
+      PNRPC_LOG_ERROR("global_default_ctx thread exception : {}", e.what());
+    }
+  });
+
   NetServer ns("127.0.0.1", 44444, 4);
   std::thread th([&]() {
     ns.run();
@@ -44,7 +54,9 @@ int main() {
     ret_code = c3.rpc_call(std::move(r3), response3);
     std::cout << ret_code  << " " << *response3 << std::endl;
   }
-  io.stop();
+  global_default_ctx.stop();
+  ctx_th.join();
+
   ns.stop();
   th.join();
   return 0;

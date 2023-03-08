@@ -33,11 +33,12 @@ struct Desc_request_type {
   }
 };
 
+extern asio::io_context global_default_ctx;
 
 RPC_DECLARE(Echo, std::string, std::string, 0x00)
 
-RPC_DECLARE(Sleep, uint32_t, uint32_t, 0x01)
+RPC_DECLARE_BIND(Sleep, uint32_t, uint32_t, 0x01)
 
-RPC_DECLARE(Desc, Desc_request_type, std::string, 0x02)
+RPC_DECLARE_BIND(Desc, Desc_request_type, std::string, 0x02)
 
 RPC_DECLARE(async_task, std::string, std::string, 0x03)

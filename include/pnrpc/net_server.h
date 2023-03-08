@@ -31,7 +31,7 @@ asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io) {
         handle_info.process_ms,
         length,
         handle_info.response.size(),
-        static_cast<void*>(&io));
+        static_cast<void*>(handle_info.bind_ctx));
       std::string msg;
       length = handle_info.response.size();
       integralSeri(length, msg);
