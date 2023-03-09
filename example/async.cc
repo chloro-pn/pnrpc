@@ -58,11 +58,14 @@ asio::awaitable<void> RPCAsync::process() {
   *response = co_await pnrpc::async_task<std::string>(std::move(request_task));
 
   RPCEchoSTUB echo_client(get_io_context(), "127.0.0.1", 44444);
+  co_await echo_client.async_connect();
   auto r = std::make_unique<std::string>("hello world");
   auto resp = std::make_unique<std::string>();
   int ret_code = co_await echo_client.rpc_call_coro(std::move(r), resp);
   if (ret_code == RPC_OK) {
     *response = *response + ", " + *resp;
   }
+
+  
   co_return;
 }

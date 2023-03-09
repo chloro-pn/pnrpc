@@ -5,6 +5,7 @@
 #include "pnrpc/rpc_server.h"
 #include "pnrpc/util.h"
 #include "pnrpc/log.h"
+#include "pnrpc/rebind_ctx.h"
 
 #include <exception>
 #include <string>

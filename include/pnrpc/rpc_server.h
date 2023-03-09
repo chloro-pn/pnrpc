@@ -12,6 +12,7 @@
 #include "pnrpc/rpc_ret_code.h"
 #include "pnrpc/util.h"
 #include "pnrpc/log.h"
+#include "pnrpc/rebind_ctx.h"
 #include "bridge/object.h"
 #include "asio.hpp"
 
@@ -66,6 +67,7 @@ class RpcServer {
     uint32_t pcode;
     double process_ms;
     asio::io_context* bind_ctx;
+    std::unique_ptr<asio::ip::tcp::socket> socket;
   };
 
   static RpcServer& Instance() {
@@ -80,7 +82,7 @@ class RpcServer {
     funcs_[pcode] = std::move(cf);
   }
 
-  asio::awaitable<HandleInfo> HandleRequest(const char* ptr, size_t len, asio::io_context& io) {
+  asio::awaitable<HandleInfo> HandleRequest(const char* ptr, size_t len, asio::io_context& io, asio::ip::tcp::socket socket) {
     HandleInfo handle_info;
     handle_info.ret_code = RPC_OK;
     handle_info.pcode = 0;
@@ -102,10 +104,11 @@ class RpcServer {
         handle_info.bind_ctx = &io;
         processor->set_io_context(io);
         auto bind_ctx = processor->bind_io_context();
-        // 如果用户给该rpc绑定了io_context，则将本协程调度给该io_context执行。
+        // 如果用户给该rpc绑定了io_context，则将本协程调度给该io_context执行，注意，需要将socket绑定的ctx和processor注册的ctx同步修改
         if (bind_ctx != nullptr) {
           handle_info.bind_ctx = bind_ctx;
           processor->set_io_context(*bind_ctx);
+          socket = rebind_ctx(std::move(socket), *bind_ctx);
           co_await asio::dispatch(asio::bind_executor(*bind_ctx, asio::use_awaitable));
         }
         // 在调度到执行本rpc的io_context上之后进行限流判定，这意味着可以通过请求信息、io_context信息等做更细粒度的限流
@@ -123,6 +126,7 @@ class RpcServer {
         }
       }
     }
+    handle_info.socket = std::make_unique<asio::ip::tcp::socket>(std::move(socket));
     bridge::BridgePool bp;
     auto root = bp.map();
     root->Insert("ret_code", bp.data(static_cast<int32_t>(handle_info.ret_code)));
@@ -183,10 +187,22 @@ class RpcStub {
  public:
   RpcStub (asio::io_context& io, const std::string& ip, uint16_t port) : request(nullptr), 
                                                                          io_(io),
-                                                                         socket_(io_) {
+                                                                         socket_(io_),
+                                                                         ip_(ip),
+                                                                         port_(port) {
+
+  }
+
+  void connect() {
     asio::ip::tcp::resolver resolver(io_);
-    auto ep = resolver.resolve(ip, std::to_string(port));
+    auto ep = resolver.resolve(ip_, std::to_string(port_));
     asio::connect(socket_, ep);
+  }
+
+  asio::awaitable<asio::ip::tcp::endpoint> async_connect() {
+    asio::ip::tcp::resolver resolver(io_);
+    auto ep = resolver.resolve(ip_, std::to_string(port_));
+    co_return co_await asio::async_connect(socket_, ep, asio::use_awaitable);
   }
 
   int rpc_call(std::unique_ptr<request_t>&& r, std::unique_ptr<response_t>& response) {
@@ -208,7 +224,7 @@ class RpcStub {
     uint32_t length = static_cast<uint32_t>(request.size());
     integralSeri(length, buf);
     buf.append(request);
-    co_await asio::async_write(socket_, asio::buffer(buf), asio::use_awaitable_t<>());
+    co_await asio::async_write(socket_, asio::buffer(buf), asio::use_awaitable);
     co_return co_await wait_for_response_coro(response);
   }
 
@@ -216,6 +232,8 @@ class RpcStub {
   std::unique_ptr<request_t> request;
   asio::io_context& io_;
   asio::ip::tcp::socket socket_;
+  std::string ip_;
+  uint16_t port_;
 
   void set_request(std::unique_ptr<request_t>&& r) {
     request = std::move(r);
@@ -240,11 +258,11 @@ class RpcStub {
 
   asio::awaitable<int> wait_for_response_coro(std::unique_ptr<response_t>& response) {
     char data[sizeof(uint32_t)];
-    co_await asio::async_read(socket_, asio::buffer(data, sizeof(uint32_t)), asio::use_awaitable_t());
+    co_await asio::async_read(socket_, asio::buffer(data, sizeof(uint32_t)), asio::use_awaitable);
     uint32_t length = integralParse<uint32_t>(&data[0], sizeof(uint32_t));
     std::string buf;
     buf.resize(length);
-    co_await asio::async_read(socket_, asio::buffer(buf), asio::use_awaitable_t());
+    co_await asio::async_read(socket_, asio::buffer(buf), asio::use_awaitable);
     co_return create_response(&buf[0], buf.size(), response);
   }
 

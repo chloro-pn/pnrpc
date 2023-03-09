@@ -1,10 +1,11 @@
 #include "rpc_sleep.h"
 
-asio::io_context global_default_ctx;
+std::unique_ptr<asio::io_context> global_default_ctx;
 
 asio::io_context* RPCSleep::bind_io_context() {
-  return &global_default_ctx;
+  return global_default_ctx.get();
 }
+
 
 asio::awaitable<void> RPCSleep::process() {
   PNRPC_LOG_INFO("my handle io's address is {}", static_cast<void*>(&get_io_context()));

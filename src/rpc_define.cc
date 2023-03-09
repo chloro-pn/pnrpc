@@ -1,0 +1,40 @@
+#include <string>
+#include <thread>
+#include <variant>
+#include <functional>
+#include <iostream>
+#include <chrono>
+
+#include "asio.hpp"
+#include "asio/experimental/awaitable_operators.hpp"
+#include "pnrpc/rpc_define.h"
+#include "pnrpc/async_task.h"
+
+struct AsyncTaskHandlerMock {
+  using call_back_t = std::function<void(std::string)>;
+  void push_async_task(const std::string& msg, call_back_t&& cb) {
+    auto ret = msg + msg;
+    cb(ret);
+  }
+
+  static AsyncTaskHandlerMock& Instance() {
+    static AsyncTaskHandlerMock obj;
+    return obj;
+  }
+};
+
+using namespace asio::experimental::awaitable_operators;
+
+/*
+ * 可以无缝使用asio提供的协程基础设施（socket、timer、Error Handling、Co-ordinating Parallel Coroutines等等）；
+ * 可以将异步操作封装为awaiter并在rpc处理函数（也是一个协程）中使用；
+ * 客户端stub的rpc请求提供了协程版本，因此可以在rpc处理函数中对其他rpc服务发起调用，一切都是非阻塞的；
+ */
+asio::awaitable<void> RPCasync_task::process() {
+  response.reset(new std::string());
+  auto request_task = [request_str = *request](std::function<void(std::string)>&& rf) mutable -> void {
+    AsyncTaskHandlerMock::Instance().push_async_task(request_str, std::move(rf));
+  };
+  *response = co_await pnrpc::async_task<std::string>(std::move(request_task));
+  co_return;
+}

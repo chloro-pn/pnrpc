@@ -30,4 +30,4 @@ struct RpcSumRequestT {
   std::vector<uint32_t> nums;
 };
 
-RPC_DECLARE(Sum, RpcSumRequestT, uint32_t, 0x00, OVERRIDE_PROCESS)
+RPC_DECLARE(Sum, RpcSumRequestT, uint32_t, 0x00, OVERRIDE_PROCESS OVERRIDE_RESTRICTOR)
