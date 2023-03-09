@@ -45,6 +45,12 @@ class RpcProcessorBase {
     return nullptr;
   }
 
+  // 用户可以通过重写此方法实现限流算法。注意：
+  // 每个RpcProcessorBase对象只负责处理一次rpc请求，因此需要将限流信息存储在生命周期更长的对象中而不是RpcProcessorBase对象中。
+  virtual bool restrictor() {
+    return true;
+  }
+
  private:
   size_t code;
   asio::io_context* running_io_;
@@ -91,6 +97,8 @@ class RpcServer {
         handle_info.ret_code = RPC_INVALID_PCODE;
         response = "not found rpc request, pcode == " + std::to_string(handle_info.pcode);
       } else {
+        // 在调用bind_io_context之前解析请求，这意味着可以根据请求信息做更细粒度的分流。
+        processor->create_request_from_raw_bytes(ptr, len - sizeof(uint32_t));
         handle_info.bind_ctx = &io;
         processor->set_io_context(io);
         auto bind_ctx = processor->bind_io_context();
@@ -100,13 +108,19 @@ class RpcServer {
           processor->set_io_context(*bind_ctx);
           co_await asio::dispatch(asio::bind_executor(*bind_ctx, asio::use_awaitable));
         }
-        processor->create_request_from_raw_bytes(ptr, len - sizeof(uint32_t));
-        Timer timer;
-        timer.Start();
-        co_await processor->process();
-        handle_info.process_ms = timer.End();
-        handle_info.ret_code = RPC_OK;
-        response = processor->create_response_to_raw_btes();
+        // 在调度到执行本rpc的io_context上之后进行限流判定，这意味着可以通过请求信息、io_context信息等做更细粒度的限流
+        bool overload = !processor->restrictor();
+        if (overload) {
+          handle_info.ret_code = RPC_OVERFLOW;
+          response = "rpc request overflow";
+        } else {
+          Timer timer;
+          timer.Start();
+          co_await processor->process();
+          handle_info.process_ms = timer.End();
+          handle_info.ret_code = RPC_OK;
+          response = processor->create_response_to_raw_btes();
+        }
       }
     }
     bridge::BridgePool bp;
@@ -250,11 +264,11 @@ class RpcStub {
 
 }
 
-#define RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, override_functions) \
+#define RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, ...) \
 class RPC ## funcname : public pnrpc::RpcProcessor<request_t, response_t> { \
  public: \
   RPC ## funcname() : pnrpc::RpcProcessor<request_t, response_t>(pcode) {} \
-  override_functions \
+  __VA_ARGS__ \
 }; \
 \
 class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pcode> { \
@@ -263,18 +277,16 @@ class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pco
 }; \
 
 #define OVERRIDE_BIND \
-  asio::awaitable<void> process() override; \
   asio::io_context* bind_io_context() override;
 
 #define OVERRIDE_PROCESS \
-  asio::awaitable<void> process() override; \
+  asio::awaitable<void> process() override;
 
+#define OVERRIDE_RESTRICTOR \
+  bool restrictor() override;
 
-#define RPC_DECLARE_BIND(funcname, request_t, response_t, pcode) \
-  RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, OVERRIDE_BIND)
-
-#define RPC_DECLARE(funcname, request_t, response_t, pcode) \
-  RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, OVERRIDE_PROCESS)
+#define RPC_DECLARE(funcname, request_t, response_t, pcode, ...) \
+  RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, __VA_ARGS__)
 
 #define REGISTER_RPC(funcname, pcode) \
   pnrpc::RpcServer::Instance().RegisterRpc(pcode, [](size_t) -> std::unique_ptr<pnrpc::RpcProcessorBase> { \

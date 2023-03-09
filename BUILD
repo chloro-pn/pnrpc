@@ -8,16 +8,18 @@ cc_library(
   deps = [
     "@bridge//:bridge",
     "@asio//:asio",
-    "@spdlog//:spdlog"
+    "@spdlog//:spdlog",
+    "@token_bucket//:token_bucket",
   ]
 )
 
 cc_binary(
   name = "example",
-  srcs = ["example/main.cc"],
+  srcs = glob(["example/*.cc", "example/*.h"]),
   deps = [
     ":pnrpc",
-  ]
+  ],
+  includes = ["example"]
 )
 
 cc_binary(

@@ -32,3 +32,10 @@ new_git_repository(
     tag = "v1.10.0",
     build_file = "//third_party:spdlog.build",
 )
+
+new_git_repository(
+  name = "token_bucket",
+  remote = "https://github.com/rigtorp/TokenBucket",
+  branch = "master",
+  build_file = "//third_party:token_bucket.build",
+)
