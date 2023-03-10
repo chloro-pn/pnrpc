@@ -65,7 +65,5 @@ asio::awaitable<void> RPCAsync::process() {
   if (ret_code == RPC_OK) {
     *response = *response + ", " + *resp;
   }
-
-  
   co_return;
 }
