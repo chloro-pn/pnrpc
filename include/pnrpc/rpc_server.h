@@ -7,12 +7,12 @@
 #include <vector>
 #include <string>
 
-#include "pnrpc/rpc_request_creator.h"
-#include "pnrpc/rpc_response_creator.h"
+#include "pnrpc/rpc_concept.h"
 #include "pnrpc/rpc_ret_code.h"
 #include "pnrpc/util.h"
 #include "pnrpc/log.h"
 #include "pnrpc/rebind_ctx.h"
+#include "pnrpc/rpc_type_creator.h"
 #include "bridge/object.h"
 #include "asio.hpp"
 
@@ -155,7 +155,7 @@ class RpcServer {
   RpcServer() {}
 };
 
-template <typename RequestType, typename ResponseType>
+template <typename RequestType, typename ResponseType> requires RpcTypeConcept<RequestType> && RpcTypeConcept<ResponseType>
 class RpcProcessor : public RpcProcessorBase {
   using request_t = RequestType;
   using response_t = ResponseType;
@@ -164,13 +164,14 @@ class RpcProcessor : public RpcProcessorBase {
   explicit RpcProcessor(size_t pcode) : request(nullptr), response(nullptr), RpcProcessorBase(pcode) {}
 
   void create_request_from_raw_bytes(const char* ptr, size_t len) override {
-    request = RequestCreator<request_t>::create(ptr, len);
+    request = RpcCreator<request_t>::create(ptr, len);
   }
 
   virtual asio::awaitable<void> process() = 0;
 
   std::string create_response_to_raw_btes() override {
-    std::string ret = ResponseCreator<response_t>::to_raw_bytes(*response);
+    std::string ret;
+    RpcCreator<response_t>::to_raw_bytes(*response, ret);
     return ret;
   }
 
@@ -179,7 +180,7 @@ class RpcProcessor : public RpcProcessorBase {
   std::unique_ptr<response_t> response;
 };
 
-template <typename RequestType, typename ResponseType, uint32_t pcode>
+template <typename RequestType, typename ResponseType, uint32_t pcode> requires RpcTypeConcept<RequestType> && RpcTypeConcept<ResponseType>
 class RpcStub {
   using request_t = RequestType;
   using response_t = ResponseType;
@@ -242,7 +243,7 @@ class RpcStub {
   std::string create_request_message() {
     std::string ret;
     integralSeri(pcode, ret);
-    RequestCreator<request_t>::to_raw_bytes(*request, ret);
+    RpcCreator<request_t>::to_raw_bytes(*request, ret);
     return ret;
   }
 
@@ -274,7 +275,7 @@ class RpcStub {
     int ret_code = wrapper["ret_code"].Get<int32_t>().value();
     std::string response = wrapper["response"].Get<std::string>().value();
     if (ret_code == RPC_OK) {
-      r = ResponseCreator<response_t>::create_from_raw_bytes(&response[0], response.size());
+      r = RpcCreator<response_t>::create(&response[0], response.size());
     }
     return ret_code;
   }

@@ -4,21 +4,23 @@
 #include <string>
 #include <cstring>
 
+#include "pnrpc/rpc_concept.h"
+
 namespace pnrpc {
 
-template<typename RequestType>
-struct RequestCreator {
-  static std::unique_ptr<RequestType> create(const char* ptr, size_t len) {
-    return RequestType::create_from_raw_bytes(ptr, len);
+template<typename RType> requires RpcTypeConcept<RType>
+struct RpcCreator {
+  static std::unique_ptr<RType> create(const char* ptr, size_t len) {
+    return RType::create_from_raw_bytes(ptr, len);
   }
 
-  static void to_raw_bytes(const RequestType& request, std::string& appender) {
-    return RequestType::to_raw_bytes(request, appender);
+  static void to_raw_bytes(const RType& request, std::string& appender) {
+    RType::to_raw_bytes(request, appender);
   }
 };
 
 template<>
-struct RequestCreator<std::string> {
+struct RpcCreator<std::string> {
   static std::unique_ptr<std::string> create(const char* ptr, size_t len) {
     return std::make_unique<std::string>(ptr, len);
   }
@@ -29,7 +31,7 @@ struct RequestCreator<std::string> {
 };
 
 template<>
-struct RequestCreator<uint32_t> {
+struct RpcCreator<uint32_t> {
   static std::unique_ptr<uint32_t> create(const char* ptr, size_t len) {
     uint32_t tmp;
     memcpy(&tmp, ptr, len);

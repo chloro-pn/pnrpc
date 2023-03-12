@@ -6,9 +6,9 @@ pnrpc is an RPC framework based on asio c++20 coroutines
 * 可以将异步操作封装为awaiter并以同步的方式书写代码，例如example/async；
 * 提供了rpc client的协程实现，这意味着你可以在rpc实现函数（是一个coroutine）中发起对其他rpc的请求，而这些都是协程化非阻塞的，例如example/async；
 * 支持多种线程模型：
-** **单线程模型**：这种模型下accept、每个socket的网络io以及rpc调用都在一个线程中进行；
-** **accept线程+多个io线程模型**：这种模型下accept单独占一个线程，将接收到的socket分配给多个io线程，每个io线程负责多个socket的网络io以及rpc调用；
-** **accpet线程+多个io线程+多个rpc调用线程模型**：这种模型和第二种模型的区别在于，io线程只负责socket的网络io，用户可以通过将rpc接口绑定到不同的自定义io_context，这些自定义io_context将负责rpc调用逻辑。（可以将多个rpc接口绑定到一个io_context上，也可以将一个rpc接口绑定到多个io_context上，这是十分自由的）
+    * **单线程模型**：这种模型下accept、每个socket的网络io以及rpc调用都在一个线程中进行；
+    * **accept线程+多个io线程模型**：这种模型下accept单独占一个线程，将接收到的socket分配给多个io线程，每个io线程负责多个socket的网络io以及rpc调用；
+    * **accpet线程+多个io线程+多个rpc调用线程模型**：这种模型和第二种模型的区别在于，io线程只负责socket的网络io，用户可以通过将rpc接口绑定到不同的自定义io_context，这些自定义io_context将负责rpc调用逻辑。（可以将多个rpc接口绑定到一个io_context上，也可以将一个rpc接口绑定到多个io_context上，这是十分自由的）
 * 支持为rpc接口绑定限流策略，例如在example/sum这个接口的实现中绑定了令牌桶的限流策略。
 
 
