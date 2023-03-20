@@ -4,16 +4,21 @@
 #include "sum.h"
 #include "rpc_sleep.h"
 #include "async.h"
+#include "sum_stream.h"
+#include "download.h"
 
 #include <iostream>
+#include <cassert>
 
 using namespace pnrpc;
 
 int main() {
-  REGISTER_RPC(Sum, 0x00)
-  REGISTER_RPC(Echo, 0x01)
-  REGISTER_RPC(Sleep, 0x02)
-  REGISTER_RPC(Async, 0x03)
+  REGISTER_RPC(Sum)
+  REGISTER_RPC(Echo)
+  REGISTER_RPC(Sleep)
+  REGISTER_RPC(Async)
+  REGISTER_RPC(SumStream)
+  REGISTER_RPC(Download)
 
   NetServer ns("127.0.0.1", 44444, 4);
   std::thread th([&]() {
@@ -34,7 +39,7 @@ int main() {
   // 等待服务器启动完成
   std::this_thread::sleep_for(std::chrono::seconds(1));
   asio::io_context io;
-
+  /*
   RPCSleepSTUB client(io, "127.0.0.1", 44444);
   client.connect();
   auto r = std::make_unique<uint32_t>(2);
@@ -58,20 +63,37 @@ int main() {
   auto response3 = std::make_unique<uint32_t>();
   ret_code = sum_client.rpc_call(std::move(r3), response3);
   std::cout << *response3 << std::endl;
-  
+  */
   size_t succ_reply = 0;
-  for(int i = 0; i < 20000; ++i) {
+  for(int i = 0; i < 200; ++i) {
     asio::co_spawn(io, [&io, &succ_reply]() -> asio::awaitable<void> {
-      RPCEchoSTUB echo_client(io, "127.0.0.1", 44444);
-      co_await echo_client.async_connect();
-      auto r = std::make_unique<std::string>("hello world");
-      auto resp = std::make_unique<std::string>();
-      int ret_code = co_await echo_client.rpc_call_coro(std::move(r), resp);
+      RPCSumStreamSTUB sum_client(io, "127.0.0.1", 44444);
+      co_await sum_client.async_connect();
+      for(int x = 0; x < 3; ++x) {
+        co_await sum_client.send_request(std::make_unique<uint32_t>(x));
+      }
+      co_await sum_client.send_request(std::make_unique<uint32_t>(3), true);
+      auto resp = std::make_unique<uint32_t>();
+      int ret_code = co_await sum_client.recv_response(resp);;
+      assert(*resp == 0 + 1 + 2 + 3);
       if (ret_code == RPC_OK) {
         ++succ_reply;
       }
     }, asio::detached);
   }
+
+  asio::co_spawn(io, [&io]() -> asio::awaitable<void> {
+    RPCDownloadSTUB client(io, "127.0.0.1", 44444);
+    co_await client.async_connect();
+    co_await client.send_request(std::make_unique<std::string>("test.txt"));
+    std::string tmp;
+    std::unique_ptr<std::string> response;
+    while(co_await client.recv_response(response) == RPC_OK && response != nullptr) {
+      tmp += *response;
+    }
+    assert(tmp == "helloworld");
+  }, asio::detached);
+
   io.run();
   io.stop();
   std::cout << succ_reply << std::endl;

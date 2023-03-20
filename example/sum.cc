@@ -3,10 +3,12 @@
 
 
 asio::awaitable<void> RPCSum::process() {
-  response = std::make_unique<uint32_t>(0.0);
+  auto request = co_await get_request_arg();
+  auto response = std::make_unique<uint32_t>(0.0);
   for(const auto& each : request->nums) {
     *response += each;
   }
+  co_await set_response_arg(std::move(response), true);
   co_return;
 }
 

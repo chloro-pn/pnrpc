@@ -4,30 +4,15 @@ namespace pnrpc {
 
 asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io) {
   try {
-    char data[sizeof(uint32_t)];
     for (;;) {
-      co_await asio::async_read(socket, asio::buffer(data), asio::use_awaitable);
-      const char* ptr = data;
-      auto length = integralParse<uint32_t>(ptr, sizeof(uint32_t));
-      std::string buf;
-      buf.resize(length);
-      co_await asio::async_read(socket, asio::buffer(buf), asio::use_awaitable);
-
-      // 这里将socket移动到处理函数中的原因是，用户可能绑定了自定义的io_context，因此需要同步修改socket绑定的ctx。
-      auto handle_info = co_await RpcServer::Instance().HandleRequest(&buf[0], buf.size(), io, std::move(socket));
+      auto handle_info = co_await RpcServer::Instance().HandleRequest(io, std::move(socket));
       socket = std::move(*handle_info.socket);
-      PNRPC_LOG_DEBUG("handle request, pcode = {}, ret_code = {}, process_ms = {}, request_length = {}, response_length = {}, io = {}",
+      PNRPC_LOG_DEBUG("handle request, pcode = {}, ret_code = {}, process_ms = {}, err_msg = {}, io = {}",
         handle_info.pcode,
         handle_info.ret_code,
         handle_info.process_ms,
-        length,
-        handle_info.response.size(),
+        handle_info.err_msg,
         static_cast<void*>(handle_info.bind_ctx));
-      std::string msg;
-      length = handle_info.response.size();
-      integralSeri(length, msg);
-      msg.append(std::move(handle_info.response));
-      co_await asio::async_write(socket, asio::buffer(msg), asio::use_awaitable);
     }
   }
   catch (asio::system_error& e) {

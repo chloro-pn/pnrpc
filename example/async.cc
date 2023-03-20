@@ -50,12 +50,12 @@ struct AsyncTaskHandlerMock {
 };
 
 asio::awaitable<void> RPCAsync::process() {
-  response = std::make_unique<std::string>();
+  auto request = co_await get_request_arg();
   AsyncTaskHandlerMock at;
   auto request_task = [request_str = *request, &at](std::function<void(std::string)>&& rf) mutable -> void {
     at.async_request(request_str, std::move(rf));
   };
-  *response = co_await pnrpc::async_task<std::string>(std::move(request_task));
+  auto response = co_await pnrpc::async_task<std::string>(std::move(request_task));
 
   RPCEchoSTUB echo_client(get_io_context(), "127.0.0.1", 44444);
   co_await echo_client.async_connect();
@@ -63,7 +63,8 @@ asio::awaitable<void> RPCAsync::process() {
   auto resp = std::make_unique<std::string>();
   int ret_code = co_await echo_client.rpc_call_coro(std::move(r), resp);
   if (ret_code == RPC_OK) {
-    *response = *response + ", " + *resp;
+    response = response + ", " + *resp;
   }
+  co_await set_response_arg(std::make_unique<std::string>(std::move(response)), true);
   co_return;
 }

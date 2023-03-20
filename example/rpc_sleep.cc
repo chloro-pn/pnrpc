@@ -9,11 +9,12 @@ asio::io_context* RPCSleep::bind_io_context() {
 
 asio::awaitable<void> RPCSleep::process() {
   PNRPC_LOG_INFO("my handle io's address is {}", static_cast<void*>(&get_io_context()));
-  response.reset(new uint32_t());
+  auto request = co_await get_request_arg();
   std::chrono::seconds s(*request);
   asio::steady_timer timer(get_io_context());
   timer.expires_after(s);
   co_await timer.async_wait(asio::use_awaitable);
-  *response = *request;
+  auto response = std::make_unique<uint32_t>(*request);
+  co_await set_response_arg(std::move(response), true);
   co_return;
 }
