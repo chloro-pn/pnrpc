@@ -22,29 +22,35 @@
 
 namespace pnrpc {
 
+class RpcServer;
+
 // 由使用者保证，在RpcProcessorBase类型的对象生命周期内，running_io_总是有效的。
 class RpcProcessorBase {
+  friend class RpcServer;
+
  public:
   RpcProcessorBase(size_t pcode, RpcType rt) : code(pcode), rpc_type_(rt), running_io_(nullptr) {
 
-  }
-
-  virtual void create_request_from_raw_bytes(std::string_view request_view, bool eof) = 0;
-  virtual asio::awaitable<void> process() = 0;
-
-  void set_io_context(asio::io_context& io) {
-    running_io_ = &io;
   }
 
   asio::io_context& get_io_context() {
     return *running_io_;
   }
 
-  virtual void bind_net(asio::ip::tcp::socket& s, asio::io_context& io_context) = 0;
-
   size_t get_pcode() const { return code; }
 
   RpcType get_rpc_type() const { return rpc_type_; }
+
+ protected:
+  void set_io_context(asio::io_context& io) {
+    running_io_ = &io;
+  }
+
+  virtual void create_request_from_raw_bytes(std::string_view request_view, bool eof) = 0;
+
+  virtual asio::awaitable<void> process() = 0;
+
+  virtual void bind_net(asio::ip::tcp::socket& s, asio::io_context& io_context) = 0;
 
   // 用户可以通过重写此方法将本rpc分配给自定义的handle_io处理
   virtual asio::io_context* bind_io_context() {
@@ -155,11 +161,7 @@ class RpcProcessor : public RpcProcessorBase {
   using request_t = RequestType;
   using response_t = ResponseType;
 
- public:
-  static constexpr uint32_t pcode = c;
-
-  explicit RpcProcessor() : RpcProcessorBase(pcode, rpc_type), request_stream(pcode), response_stream(), request_count_(0), response_eof_(false), response_count_(0) {}
-
+ protected:
   void create_request_from_raw_bytes(std::string_view request_view, bool eof) override {
     auto request = RpcCreator<request_t>::create(&request_view[0], request_view.size());
     request_stream.set_init_package(std::move(request), eof);
@@ -171,20 +173,25 @@ class RpcProcessor : public RpcProcessorBase {
     request_stream.update_bind_socket(&s);
     response_stream.update_bind_socket(&s);
     set_io_context(io_context);
-  }
+  }  
 
-  asio::awaitable<std::unique_ptr<request_t>> get_request_arg() {
+ public:
+  static constexpr uint32_t pcode = c;
+
+  explicit RpcProcessor() : RpcProcessorBase(pcode, rpc_type), request_stream(pcode), response_stream(), request_count_(0), response_eof_(false), response_count_(0) {}
+
+  asio::awaitable<std::optional<request_t>> get_request_arg() {
     if (get_rpc_type() == RpcType::Simple || get_rpc_type() == RpcType::ServerSideStream) {
       if (request_count_ >= 1) {
         PNRPC_LOG_WARN("rpc {} request_count_ == {}", pcode, request_count_);
       }
-      co_return nullptr;
+      co_return std::optional<request_t>();
     }
     request_count_ += 1;
     co_return co_await get_request_stream().Read();
   }
 
-  asio::awaitable<void> set_response_arg(std::unique_ptr<response_t>&& r, bool eof) {
+  asio::awaitable<void> set_response_arg(const response_t& r, bool eof) {
     if (response_eof_ == true) {
       PNRPC_LOG_WARN("rpc {} repeatedly set eof", pcode);
       co_return;
@@ -196,7 +203,8 @@ class RpcProcessor : public RpcProcessorBase {
     }
     response_eof_ = eof;
     response_count_ += 1;
-    co_return co_await get_response_stream().Send(std::move(r), RPC_OK, eof);
+    co_await get_response_stream().Send(r, RPC_OK, eof);
+    co_return;
   }
 
   ~RpcProcessor() {
@@ -273,13 +281,18 @@ class RpcStub : public RpcStubBase<RequestType, ResponseType, pcode> {
 
   RpcStub(asio::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port) {}
 
-  asio::awaitable<int> rpc_call_coro(std::unique_ptr<request_t>&& r, std::unique_ptr<response_t>& response) {
-    co_await this->request_stream.Send(std::move(r), true);
+  asio::awaitable<int> rpc_call_coro(const request_t& r, response_t& response) {
+    co_await this->request_stream.Send(r, true);
     uint32_t ret_code = 0;
     std::string err_msg;
-    response = co_await this->response_stream.Read(ret_code, err_msg);
+    auto tmp = co_await this->response_stream.Read(ret_code, err_msg);
     if (ret_code != RPC_OK) {
       PNRPC_LOG_INFO("rpc call failed, ret_code = {}, err_msg = {}", ret_code, err_msg);
+    }
+    if (!tmp.has_value()) {
+      PNRPC_LOG_WARN("rpc {} no response", pcode);
+    } else {
+      response = std::move(tmp).value();
     }
     co_return ret_code;
   }
@@ -293,16 +306,16 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
 
   RpcStub(asio::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false), recved_(false) {}
 
-  asio::awaitable<int> send_request(std::unique_ptr<request_t>&& request, bool eof = false) {
+  asio::awaitable<int> send_request(const request_t& request, bool eof = false) {
     if (send_eof_ == true) {
       co_return RPC_SEND_AFTER_EOF;
     }
-    co_await this->request_stream.Send(std::move(request), eof);
+    co_await this->request_stream.Send(request, eof);
     send_eof_ = eof;
     co_return RPC_OK;
   }
 
-  asio::awaitable<int> recv_response(std::unique_ptr<response_t>& response) {
+  asio::awaitable<int> recv_response(response_t& response) {
     if (send_eof_ == false) {
       co_return  RPC_RECV_BEFORE_EOF;
     }
@@ -311,11 +324,15 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
     }
     uint32_t ret_code = 0;
     std::string err_msg;
-    response = co_await this->response_stream.Read(ret_code, err_msg);
+    auto tmp = co_await this->response_stream.Read(ret_code, err_msg);
     recved_ = true;
     if (ret_code != RPC_OK) {
       PNRPC_LOG_WARN("rpc response error : {}, {}", ret_code, err_msg);
     }
+    if (!tmp.has_value()) {
+      PNRPC_LOG_WARN("rpc no response : {}", ret_code);
+    }
+    response = std::move(tmp).value();
     co_return ret_code;
   }
 
@@ -331,16 +348,16 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
   RpcStub(asio::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
 
-  asio::awaitable<int> send_request(std::unique_ptr<request_t>&& request) {
+  asio::awaitable<int> send_request(const request_t& request) {
     if (send_eof_ == true) {
       co_return RPC_SEND_AFTER_EOF;
     }
     send_eof_ = true;
-    co_await this->request_stream.Send(std::move(request), send_eof_);
+    co_await this->request_stream.Send(request, send_eof_);
     co_return RPC_OK;
   }
 
-  asio::awaitable<int> recv_response(std::unique_ptr<response_t>& response) {
+  asio::awaitable<int> recv_response(std::optional<response_t>& response) {
     if (send_eof_ == false) {
       co_return  RPC_RECV_BEFORE_EOF;
     }

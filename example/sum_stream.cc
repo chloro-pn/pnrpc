@@ -1,10 +1,14 @@
 #include "sum_stream.h"
 
 asio::awaitable<void> RPCSumStream::process() {
-  std::unique_ptr<uint32_t> request;
-  std::unique_ptr<uint32_t> ret(new uint32_t(0));
-  while(request = co_await get_request_arg()) {
-    *ret += *request;
+  std::optional<uint32_t> request;
+  uint32_t ret = 0;
+  while(true) {
+    auto requeset = co_await get_request_arg();
+    if (requeset.has_value() == false) {
+      break;
+    }
+    ret += requeset.value();
   }
-  co_await set_response_arg(std::move(ret), true);
+  co_await set_response_arg(ret, true);
 }

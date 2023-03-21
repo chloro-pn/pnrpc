@@ -14,13 +14,13 @@ namespace pnrpc {
 template<typename RpcType>
 class RequestPackager {
  public:  
-  void seri_request_package(std::unique_ptr<RpcType>&& package, std::string& appender, uint32_t pcode, bool eof) {
+  void seri_request_package(const RpcType& package, std::string& appender, uint32_t pcode, bool eof) {
     pcodeSeri(pcode, appender);
     eofSeri(eof, appender);
-    RpcCreator<RpcType>::to_raw_bytes(*package, appender);
+    RpcCreator<RpcType>::to_raw_bytes(package, appender);
   }
 
-  std::unique_ptr<RpcType> parse_request_package(const std::string& msg, uint32_t& pcode, bool& eof) {
+  RpcType parse_request_package(const std::string& msg, uint32_t& pcode, bool& eof) {
     const char* ptr = &msg[0];
     size_t buf_len = msg.size();
     pcode = ParsePcode(ptr, buf_len);
@@ -48,20 +48,20 @@ class RequestPackager<void> {
 template<typename RpcType>
 class ResponsePackager {
  public:
-  void seri_response_package(std::unique_ptr<RpcType>&& package, std::string& appender, uint32_t ret_code, bool eof) {
+  void seri_response_package(const RpcType& package, std::string& appender, uint32_t ret_code, bool eof) {
     bridge::BridgePool bp;
     auto root = bp.map();
     root->Insert("ret_code", bp.data(ret_code));
     root->Insert("eof", bp.data(eof == true ? uint32_t(0) : uint32_t(1)));
     std::string pkg_binary;
-    RpcCreator<RpcType>::to_raw_bytes(*package, pkg_binary);
+    RpcCreator<RpcType>::to_raw_bytes(package, pkg_binary);
     root->Insert("response", bp.data(std::move(pkg_binary)));
     auto response = bridge::Serialize(std::move(root), bp);
     appender.append(response);
   }
 
   struct ResponseInfo {
-    std::unique_ptr<RpcType> response;
+    RpcType response;
     uint32_t ret_code;
     std::string err_msg;
     bool eof;

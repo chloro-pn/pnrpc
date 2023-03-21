@@ -6,14 +6,14 @@
 #include <vector>
 
 struct RpcSumRequestT {
-  static std::unique_ptr<RpcSumRequestT> create_from_raw_bytes(const char* ptr, size_t len) {
-    auto request = std::make_unique<RpcSumRequestT>();
+  static RpcSumRequestT create_from_raw_bytes(const char* ptr, size_t len) {
+    RpcSumRequestT request;
     bridge::BridgePool bp;
     auto root = bridge::Parse(std::string(ptr, len), bp);
     bridge::ObjectWrapper wrapper(root.get());
     for(size_t i = 0; i < wrapper.Size(); ++i) {
       uint32_t num = wrapper[i].Get<uint32_t>().value();
-      request->nums.push_back(num);
+      request.nums.push_back(num);
     }
     return request;
   }

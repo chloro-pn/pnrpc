@@ -1,14 +1,13 @@
 #include "sum.h"
 #include "pnrpc/token_bucket.h"
 
-
 asio::awaitable<void> RPCSum::process() {
-  auto request = co_await get_request_arg();
-  auto response = std::make_unique<uint32_t>(0.0);
-  for(const auto& each : request->nums) {
-    *response += each;
+  auto request = (co_await get_request_arg()).value();
+  uint32_t resp = 0;
+  for(const auto& each : request.nums) {
+    resp += each;
   }
-  co_await set_response_arg(std::move(response), true);
+  co_await set_response_arg(resp, true);
   co_return;
 }
 

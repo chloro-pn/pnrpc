@@ -8,6 +8,10 @@
 #include <mutex>
 #include <vector>
 #include <cassert>
+#include <variant>
+
+#include "asio/experimental/awaitable_operators.hpp"
+using namespace asio::experimental::awaitable_operators;
 
 struct AsyncTaskHandlerMock {
   using call_back_t = std::function<void(std::string)>;
@@ -52,19 +56,22 @@ struct AsyncTaskHandlerMock {
 asio::awaitable<void> RPCAsync::process() {
   auto request = co_await get_request_arg();
   AsyncTaskHandlerMock at;
-  auto request_task = [request_str = *request, &at](std::function<void(std::string)>&& rf) mutable -> void {
+  auto request_task = [request_str = request.value(), &at](std::function<void(std::string)>&& rf) mutable -> void {
     at.async_request(request_str, std::move(rf));
   };
   auto response = co_await pnrpc::async_task<std::string>(std::move(request_task));
 
   RPCEchoSTUB echo_client(get_io_context(), "127.0.0.1", 44444);
   co_await echo_client.async_connect();
-  auto r = std::make_unique<std::string>("hello world");
-  auto resp = std::make_unique<std::string>();
-  int ret_code = co_await echo_client.rpc_call_coro(std::move(r), resp);
-  if (ret_code == RPC_OK) {
-    response = response + ", " + *resp;
+
+  std::string resp;
+  std::variant<int, std::monostate> results = co_await (
+    echo_client.rpc_call_coro("hello world", resp)
+    || asio::steady_timer(get_io_context(), std::chrono::seconds(2)).async_wait(asio::use_awaitable)
+  );
+  if (results.index() == 0 && std::get<0>(results) == RPC_OK) {
+    response = response + ", " + resp;
   }
-  co_await set_response_arg(std::make_unique<std::string>(std::move(response)), true);
+  co_await set_response_arg(response, true);
   co_return;
 }

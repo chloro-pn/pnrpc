@@ -10,6 +10,7 @@
 #include <cassert>
 #include <string>
 #include <string_view>
+#include <optional>
 
 namespace pnrpc {
 
@@ -68,11 +69,11 @@ class StreamBase {
 template <typename RpcType> requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value
 class ClientToServerStream : public StreamBase {
  public:
-  explicit ClientToServerStream(uint32_t pcode) : StreamBase(), pcode_(pcode), read_eof_(false) {
+  explicit ClientToServerStream(uint32_t pcode) : StreamBase(), set_init_package_(false), pcode_(pcode), read_eof_(false) {
 
   }
 
-  asio::awaitable<void> Send(std::unique_ptr<RpcType>&& package, bool eof) {
+  asio::awaitable<void> Send(const RpcType& package, bool eof) {
     std::string buf;
     RequestPackager<RpcType> rp;
     rp.seri_request_package(std::move(package), buf, pcode_, eof);
@@ -80,19 +81,20 @@ class ClientToServerStream : public StreamBase {
     co_return;
   }
 
-  asio::awaitable<std::unique_ptr<RpcType>> Read() {
-    if (pkg_ != nullptr) {
+  asio::awaitable<std::optional<RpcType>> Read() {
+    if (set_init_package_ == true) {
+      set_init_package_ = false;
       co_return std::move(pkg_);
     }
     if (read_eof_ == true) {
-      co_return nullptr;
+      co_return std::optional<RpcType>();
     }
     std::string buf = co_await coro_recv();
     RequestPackager<RpcType> rp;
     uint32_t pc;
     auto pkg = rp.parse_request_package(buf, pc, read_eof_);
     assert(pc == pcode_);
-    co_return std::move(pkg);
+    co_return pkg;
   }
 
   uint32_t get_pcode() const {
@@ -103,13 +105,15 @@ class ClientToServerStream : public StreamBase {
     return read_eof_;
   }
 
-  void set_init_package(std::unique_ptr<RpcType>&& package, bool eof) {
+  void set_init_package(RpcType&& package, bool eof) {
     pkg_ = std::move(package);
+    set_init_package_ = true;
     read_eof_ = eof;
   }
 
  private:
-  std::unique_ptr<RpcType> pkg_;
+  RpcType pkg_;
+  bool set_init_package_;
   uint32_t pcode_;
   bool read_eof_;
 };
@@ -147,17 +151,17 @@ class ServerToClientStream : public StreamBase {
 
   }
 
-  asio::awaitable<void> Send(std::unique_ptr<RpcType>&& package, uint32_t ret_code, bool eof) {
+  asio::awaitable<void> Send(const RpcType& package, uint32_t ret_code, bool eof) {
     std::string buf;
     ResponsePackager<RpcType> rp;
-    rp.seri_response_package(std::move(package), buf, ret_code, eof);
+    rp.seri_response_package(package, buf, ret_code, eof);
     co_await coro_send(buf);
     co_return;
   }
 
-  asio::awaitable<std::unique_ptr<RpcType>> Read(uint32_t& ret_code, std::string& err_msg) {
+  asio::awaitable<std::optional<RpcType>> Read(uint32_t& ret_code, std::string& err_msg) {
     if (read_eof_ == true) {
-      co_return nullptr;
+      co_return std::optional<RpcType>();
     }
     std::string buf = co_await coro_recv();
     ResponsePackager<RpcType> rp;
