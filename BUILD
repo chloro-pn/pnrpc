@@ -22,10 +22,12 @@ cc_binary(
   includes = ["example"]
 )
 
-cc_binary(
+cc_test(
   name = "test",
-  srcs = ["test/bridge_test.cc"],
+  srcs = glob(["test/*.cc"]),
   deps = [
     "@bridge//:bridge",
+    "@googletest//:gtest",
+    "@googletest//:gtest_main",
   ]
 )

@@ -40,6 +40,13 @@ int main() {
   std::this_thread::sleep_for(std::chrono::seconds(1));
   asio::io_context io;
 
+  RPCEchoSTUB echo_client(io, "127.0.0.1", 44444);
+  echo_client.connect();
+  std::string resp;
+  uint32_t ret_code = echo_client.rpc_call("helloworld", resp);
+  assert(ret_code == RPC_OK);
+  assert(resp == "helloworld");
+  
   asio::co_spawn(io, [&io]() -> asio::awaitable<void> {
     RPCSumStreamSTUB sum_client(io, "127.0.0.1", 44444);
     co_await sum_client.async_connect();
@@ -64,6 +71,7 @@ int main() {
     }
     assert(tmp == "helloworld");
   }, asio::detached);
+  
 
   io.run();
   io.stop();

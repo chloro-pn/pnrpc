@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <cassert>
 
 #include "pnrpc/rpc_concept.h"
 #include "pnrpc/rpc_ret_code.h"
@@ -34,6 +35,7 @@ class RpcProcessorBase {
   }
 
   asio::io_context& get_io_context() {
+    assert(running_io_ != nullptr);
     return *running_io_;
   }
 
@@ -184,8 +186,8 @@ class RpcProcessor : public RpcProcessorBase {
     if (get_rpc_type() == RpcType::Simple || get_rpc_type() == RpcType::ServerSideStream) {
       if (request_count_ >= 1) {
         PNRPC_LOG_WARN("rpc {} request_count_ == {}", pcode, request_count_);
+        co_return std::optional<request_t>();
       }
-      co_return std::optional<request_t>();
     }
     request_count_ += 1;
     co_return co_await get_request_stream().Read();

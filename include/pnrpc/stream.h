@@ -4,6 +4,7 @@
 #include "pnrpc/rpc_type_creator.h"
 #include "pnrpc/util.h"
 #include "pnrpc/packager.h"
+#include "pnrpc/log.h"
 #include "asio.hpp"
 
 #include <memory>
@@ -76,9 +77,16 @@ class ClientToServerStream : public StreamBase {
   asio::awaitable<void> Send(const RpcType& package, bool eof) {
     std::string buf;
     RequestPackager<RpcType> rp;
-    rp.seri_request_package(std::move(package), buf, pcode_, eof);
+    rp.seri_request_package(package, buf, pcode_, eof);
     co_await coro_send(buf);
     co_return;
+  }
+
+  void SendSync(const RpcType& package, bool eof) {
+    std::string buf;
+    RequestPackager<RpcType> rp;
+    rp.seri_request_package(package, buf, pcode_, eof);
+    send(buf);
   }
 
   asio::awaitable<std::optional<RpcType>> Read() {
@@ -95,6 +103,22 @@ class ClientToServerStream : public StreamBase {
     auto pkg = rp.parse_request_package(buf, pc, read_eof_);
     assert(pc == pcode_);
     co_return pkg;
+  }
+
+  std::optional<RpcType> ReadSync() {
+    if (set_init_package_ == true) {
+      set_init_package_ = false;
+      return std::move(pkg_);
+    }
+    if (read_eof_ == true) {
+      return std::optional<RpcType>();
+    }
+    std::string buf = recv();
+    RequestPackager<RpcType> rp;
+    uint32_t pc;
+    auto pkg = rp.parse_request_package(buf, pc, read_eof_);
+    assert(pc == pcode_);
+    return pkg;
   }
 
   uint32_t get_pcode() const {
@@ -159,6 +183,13 @@ class ServerToClientStream : public StreamBase {
     co_return;
   }
 
+  void SendSync(const RpcType& package, uint32_t ret_code, bool eof) {
+    std::string buf;
+    ResponsePackager<RpcType> rp;
+    rp.seri_response_package(package, buf, ret_code, eof);
+    send(buf);
+  }
+
   asio::awaitable<std::optional<RpcType>> Read(uint32_t& ret_code, std::string& err_msg) {
     if (read_eof_ == true) {
       co_return std::optional<RpcType>();
@@ -170,6 +201,19 @@ class ServerToClientStream : public StreamBase {
     err_msg = pkg.err_msg;
     read_eof_ = pkg.eof;
     co_return std::move(pkg.response);
+  }
+
+  std::optional<RpcType> ReadSync(uint32_t ret_code, std::string& err_msg) {
+    if (read_eof_ == true) {
+      return std::optional<RpcType>();
+    }
+    std::string buf = recv();
+    ResponsePackager<RpcType> rp;
+    auto pkg = rp.parse_response_package(buf);
+    ret_code = pkg.ret_code;
+    err_msg = pkg.err_msg;
+    read_eof_ = pkg.eof;
+    return std::move(pkg.response);
   }
 
  private:

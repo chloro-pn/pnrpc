@@ -112,6 +112,15 @@ bool RPCSum::restrictor() {
     assert(ret_code == RPC_OK);
   }, asio::detached);
 ```
+除了协程类型的stub接口外，还提供了阻塞式接口，如下：
+```c++
+  RPCEchoSTUB echo_client(io, "127.0.0.1", 44444);
+  echo_client.connect();
+  std::string resp;
+  uint32_t ret_code = echo_client.rpc_call("helloworld", resp);
+  assert(ret_code == RPC_OK);
+  assert(resp == "helloworld");
+```
 
 ## todo
 * 提供多种客户端连接模型（短连接、连接池、socket复用）

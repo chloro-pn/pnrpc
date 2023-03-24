@@ -77,6 +77,22 @@ class RpcStub : public RpcStubBase<RequestType, ResponseType, pcode> {
     }
     co_return ret_code;
   }
+
+  int rpc_call(const request_t& r, response_t& response) {
+    this->request_stream.SendSync(r, true);
+    uint32_t ret_code = 0;
+    std::string err_msg;
+    auto tmp = this->response_stream.ReadSync(ret_code, err_msg);
+    if (ret_code != RPC_OK) {
+      PNRPC_LOG_INFO("rpc call failed, ret_code = {}, err_msg = {}", ret_code, err_msg);
+    }
+    if (!tmp.has_value()) {
+      PNRPC_LOG_WARN("rpc {} no response", pcode);
+    } else {
+      response = std::move(tmp).value();
+    }
+    return ret_code;
+  }
 };
 
 template <typename RequestType, typename ResponseType, uint32_t pcode>
@@ -94,6 +110,15 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
     co_await this->request_stream.Send(request, eof);
     send_eof_ = eof;
     co_return RPC_OK;
+  }
+
+  int send_request_sync(const request_t& request, bool eof = false) {
+    if (send_eof_ == true) {
+      return RPC_SEND_AFTER_EOF;
+    }
+    this->request_stream.SendSync(request, eof);
+    send_eof_ = eof;
+    return RPC_OK;
   }
 
   asio::awaitable<int> recv_response(response_t& response) {
@@ -115,6 +140,27 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
     }
     response = std::move(tmp).value();
     co_return ret_code;
+  }
+
+  int recv_response_sync(response_t& response) {
+    if (send_eof_ == false) {
+      return  RPC_RECV_BEFORE_EOF;
+    }
+    if (recved_ == true) {
+      return RPC_RECV_DUPLICATE;
+    }
+    uint32_t ret_code = 0;
+    std::string err_msg;
+    auto tmp = this->response_stream.ReadSync(ret_code, err_msg);
+    recved_ = true;
+    if (ret_code != RPC_OK) {
+      PNRPC_LOG_WARN("rpc response error : {}, {}", ret_code, err_msg);
+    }
+    if (!tmp.has_value()) {
+      PNRPC_LOG_WARN("rpc no response : {}", ret_code);
+    }
+    response = std::move(tmp).value();
+    return ret_code;
   }
 
  private:
@@ -139,6 +185,15 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
     co_return RPC_OK;
   }
 
+  int send_request_sync(const request_t& request) {
+    if (send_eof_ == true) {
+      return RPC_SEND_AFTER_EOF;
+    }
+    send_eof_ = true;
+    this->request_stream.SendSync(request, send_eof_);
+    return RPC_OK;
+  }
+
   asio::awaitable<int> recv_response(std::optional<response_t>& response) {
     if (send_eof_ == false) {
       co_return  RPC_RECV_BEFORE_EOF;
@@ -150,6 +205,19 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
       PNRPC_LOG_WARN("rpc response error : {}, {}", ret_code, err_msg);
     }
     co_return ret_code;
+  }
+
+  int recv_response_sync(std::optional<response_t>& response) {
+    if (send_eof_ == false) {
+      return  RPC_RECV_BEFORE_EOF;
+    }
+    uint32_t ret_code = 0;
+    std::string err_msg;
+    response = this->response_stream.ReadSync(ret_code, err_msg);
+    if (ret_code != RPC_OK) {
+      PNRPC_LOG_WARN("rpc response error : {}, {}", ret_code, err_msg);
+    }
+    return ret_code;
   }
 
  private:
@@ -173,6 +241,15 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : publi
     co_return RPC_OK;
   }
 
+  int send_request_sync(const request_t& request, bool eof = false) {
+    if (send_eof_ == true) {
+      return RPC_SEND_AFTER_EOF;
+    }
+    send_eof_ = eof;
+    this->request_stream.SendSync(request, eof);
+    return RPC_OK;
+  }
+
   asio::awaitable<int> recv_response(std::optional<response_t>& response) {
     if (send_eof_ == false) {
       co_return  RPC_RECV_BEFORE_EOF;
@@ -184,6 +261,19 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : publi
       PNRPC_LOG_WARN("rpc response error : {}, {}", ret_code, err_msg);
     }
     co_return ret_code;
+  }
+
+  int recv_response_sync(std::optional<response_t>& response) {
+    if (send_eof_ == false) {
+      return  RPC_RECV_BEFORE_EOF;
+    }
+    uint32_t ret_code = 0;
+    std::string err_msg;
+    response = this->response_stream.ReadSync(ret_code, err_msg);
+    if (ret_code != RPC_OK) {
+      PNRPC_LOG_WARN("rpc response error : {}, {}", ret_code, err_msg);
+    }
+    return ret_code;
   }
 
  private:
