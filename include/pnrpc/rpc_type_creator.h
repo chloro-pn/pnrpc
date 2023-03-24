@@ -2,8 +2,10 @@
 
 #include <string>
 #include <cstring>
+#include <concepts>
 
 #include "pnrpc/rpc_concept.h"
+#include "pnrpc/util.h"
 
 namespace pnrpc {
 
@@ -32,13 +34,11 @@ struct RpcCreator<std::string> {
 template<>
 struct RpcCreator<uint32_t> {
   static uint32_t create(const char* ptr, size_t len) {
-    uint32_t tmp;
-    memcpy(&tmp, ptr, len);
-    return tmp;
+    return integralParse<uint32_t>(ptr, len);
   }
 
   static void to_raw_bytes(const uint32_t& request, std::string& appender) {
-    appender.append((const char*)&request, sizeof(request));
+    integralSeri(request, appender);
   }
 };
 

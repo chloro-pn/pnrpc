@@ -7,6 +7,8 @@
 #include "pnrpc/util.h"
 #include "pnrpc/rpc_type_creator.h"
 #include "pnrpc/log.h"
+#include "pnrpc/rpc_ret_code.h"
+
 #include "bridge/object.h"
 
 namespace pnrpc {
@@ -84,7 +86,7 @@ class ResponsePackager {
   }
 };
 
-// 这个特换用来回复错误信息
+// 这个特化用来回复错误信息
 template <>
 class ResponsePackager<void> {
  public:

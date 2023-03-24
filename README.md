@@ -16,60 +16,104 @@ pnrpc is an RPC framework based on asio c++20 coroutines
 * cpp compiler supporting c++20 (like g++-11)
 * bazel 6.0.0
 
-## example
+## doc
 
-echo.h:
+##### rpc声明
+首先需要通过宏```RPC_DECLARE```来声明rpc接口，以echo为例：
 ```c++
-#pragma once
-
-#include "pnrpc/net_server.h"
-
-RPC_DECLARE(Echo, std::string, std::string, 0x01, OVERRIDE_PROCESS)
+RPC_DECLARE(Echo, std::string, std::string, 0x01, pnrpc::RpcType::Simple, OVERRIDE_PROCESS)
 ```
-
-echo.cc:
+参数的含义依次为:
+* rpc接口名称（不可重复）
+* 请求参数类型 
+* 回复参数类型
+  请求参数和回复参数类型需要满足如下concept，即除了内置基本类型，用户需要为参数类型指定序列化和反序列化函数：
+  ```c++
+  template <typename T>
+  concept RpcTypeConcept = requires (T t, const char* ptr, size_t len, std::string& appender) {
+    { T::create_from_raw_bytes(ptr, len) } -> std::same_as<T>;
+    { T::to_raw_bytes(t, appender) } -> std::same_as<void>;
+  } || RpcBasicType<T>;
+  ```
+* 编号（不可重复）
+* rpc类型（一应一答型、客户端流式、服务器流式、双向流式四种类型），如下：
 ```c++
-#include "echo.h"
+enum class RpcType : uint8_t {
+  Simple,
+  ServerSideStream,
+  ClientSideStream,
+  BidirectStream,
+};
+```
+* 需要定制的功能，有如下选项可以指定（这些选项可以同时指定，使用空格分开即可）：
+  * OVERRIDE_PROCESS 重载rpc处理函数，一般情况这个是必须指定的
+  * OVERRIDE_BIND 重载网络绑定函数，用户可以通过重载这个函数将rpc接口的执行绑定到自定义的io_context上
+  * OVERRIDE_RESTRICTOR 重载限流器函数，用户可以通过重载这个函数为rpc接口绑定限流器
 
+##### rpc定义
+声明之后，需要为rpc接口定制的功能提供定义，如果定制了OVERRIDE_PROCESS（参考example/echo的例子）：
+```c++
 asio::awaitable<void> RPCEcho::process() {
-  response.reset(new std::string(*request));
+  auto request = co_await get_request_arg();
+  co_await set_response_arg(request.value(), true);
   co_return;
 }
 ```
 
-server:
+如果定制了OVERRIDE_BIND（参考example/rpc_sleep的例子）：
 ```c++
-#include "pnrpc/net_server.h"
+std::unique_ptr<asio::io_context> global_default_ctx;
 
-#include "echo.h"
+asio::io_context* RPCSleep::bind_io_context() {
+  return global_default_ctx.get();
+}
+```
 
-int main() {
-  REGISTER_RPC(Echo, 0x01)
+如果定制了OVERRIDE_RESTRICTOR（参考example/sum的例子）：
+```c++
+bool RPCSum::restrictor() {
+  // 设置令牌桶的令牌入桶速率为100/s，容量为10000
+  static TokenBucket tb(100, 100000);
+  return tb.consume(1);
+}
+```
+
+##### server端
+在server端首先通过REGISTER_RPC宏注册rpc接口，然后定义NetServer类型变量并启动server，NetServer的构造函数参数分别是ip、port、io线程个数（如果不指定的话就是单线程模型，accept、每个socket的网络io以及rpc调用都在一个线程中进行）
+```c++
+  REGISTER_RPC(Sum)
+  REGISTER_RPC(Echo)
+  REGISTER_RPC(Sleep)
+  REGISTER_RPC(Async)
+  REGISTER_RPC(SumStream)
+  REGISTER_RPC(Download)
 
   NetServer ns("127.0.0.1", 44444, 4);
-  ns.run();
-  return 0;
-}
+  std::thread th([&]() {
+    ns.run();
+  });
 ```
 
-client:
+##### client端
+在声明rpc接口的时候，已经定义了客户端stub类，用户可以通过该类型的变量作为客户端访问对应的rpc，对于不同的rpc类型，客户端stub类提供了不同的接口，下面这个是ClientSideStream类型的例子，用户可以通过send_request函数发送流式数据（第二个参数为eof，设置为true时意味着流式数据传送完毕），然后通过recv_response函数接收回复信息。
 ```c++
-#include "pnrpc/net_server.h"
-
-#include "echo.h"
-
-#include <iostream>
-
-int main() {
-  // rpc client支持两种访问模式，同步阻塞式访问和协程式访问，同步阻塞式不需要运行io_context，虽然构造的时候需要指定。
   asio::io_context io;
 
-  RPCEchoSTUB echo_client(io, "127.0.0.1", 44444);
-  echo_client.connect();
-  auto r2 = std::make_unique<std::string>("hello world");
-  auto response2 = std::make_unique<std::string>();
-  ret_code = echo_client.rpc_call(std::move(r2), response2);
-  std::cout << *response2 << std::endl;
-  return 0;
-}
+  asio::co_spawn(io, [&io]() -> asio::awaitable<void> {
+    RPCSumStreamSTUB sum_client(io, "127.0.0.1", 44444);
+    co_await sum_client.async_connect();
+    for(uint32_t x = 0; x < 3; ++x) {
+      co_await sum_client.send_request(x);
+    }
+    co_await sum_client.send_request(3, true);
+    uint32_t resp = 0;
+    int ret_code = co_await sum_client.recv_response(resp);;
+    assert(resp == 0 + 1 + 2 + 3);
+    assert(ret_code == RPC_OK);
+  }, asio::detached);
 ```
+
+## todo
+* 提供多种客户端连接模型（短连接、连接池、socket复用）
+* 完善支持的内置类型
+* 补充单元测试和文档

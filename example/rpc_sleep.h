@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pnrpc/net_server.h"
+#include "pnrpc/rpc_declare.h"
 
 #include <memory>
 
