@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <chrono>
 
+#include "pnrpc/exception.h"
+
 namespace pnrpc {
 
 enum class RpcType : uint8_t {
@@ -13,6 +15,9 @@ enum class RpcType : uint8_t {
   ClientSideStream,
   BidirectStream,
 };
+
+// 16MB
+constexpr size_t max_package_size = 16 * 1024 * 1024;
 
 }
 
@@ -72,7 +77,7 @@ inline void integralSeri(T t, char* ptr) {
 template <typename T>
 T integralParse(const char* ptr, size_t buf_len) {
   if (buf_len < sizeof(T)) {
-    throw std::logic_error("invalid integralParse request");
+    throw pnrpc::PnrpcException("invalid integralParse request");
   }
   T ret;
   memcpy(&ret, ptr, sizeof(T));

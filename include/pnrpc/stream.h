@@ -5,6 +5,7 @@
 #include "pnrpc/util.h"
 #include "pnrpc/packager.h"
 #include "pnrpc/log.h"
+#include "pnrpc/exception.h"
 #include "asio.hpp"
 
 #include <memory>
@@ -29,6 +30,9 @@ class StreamBase {
   asio::awaitable<void> coro_send(const std::string& buf) {
     std::string tmp;
     uint32_t length = buf.size();
+    if (length >= max_package_size) {
+      throw PnrpcException("package is too large : " + std::to_string(length));
+    }
     integralSeri(length, tmp);
     tmp.append(buf);
     co_await asio::async_write(*socket_, asio::buffer(tmp), asio::use_awaitable);
@@ -38,6 +42,9 @@ class StreamBase {
   void send(const std::string& buf) {
     std::string tmp;
     uint32_t length = buf.size();
+    if (length >= max_package_size) {
+      throw PnrpcException("package is too large : " + std::to_string(length));
+    }
     integralSeri(length, tmp);
     tmp.append(buf);
     asio::write(*socket_, asio::buffer(tmp));
@@ -47,6 +54,9 @@ class StreamBase {
     char data[sizeof(uint32_t)];
     co_await asio::async_read(*socket_, asio::buffer(data), asio::use_awaitable);
     auto length = integralParse<uint32_t>(data);
+    if (length >= max_package_size) {
+      throw PnrpcException("package is too large : " + std::to_string(length));
+    }
     std::string buf;
     buf.resize(length);
     co_await asio::async_read(*socket_, asio::buffer(buf), asio::use_awaitable);
@@ -57,6 +67,9 @@ class StreamBase {
     char data[sizeof(uint32_t)];
     asio::read(*socket_, asio::buffer(data));
     auto length = integralParse<uint32_t>(data);
+    if (length >= max_package_size) {
+      throw PnrpcException("package is too large : " + std::to_string(length));
+    }
     std::string buf;
     buf.resize(length);
     asio::read(*socket_, asio::buffer(buf));

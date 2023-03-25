@@ -6,6 +6,7 @@
 #include "pnrpc/util.h"
 #include "pnrpc/log.h"
 #include "pnrpc/rebind_ctx.h"
+#include "pnrpc/exception.h"
 
 #include <exception>
 #include <string>
@@ -28,7 +29,8 @@ class NetServer {
       co_spawn(io_, listener(ip_, port_, io_, handle_io_), asio::detached);
       io_.run();
     } catch (std::exception& e) {
-      PNRPC_LOG_ERROR("NetServer.run() exception : {}", e.what());
+      PNRPC_LOG_ERROR("unknow exception : {}", e.what());
+      throw;
     }
     PNRPC_LOG_INFO("net server stop");
   }

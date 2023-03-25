@@ -1,4 +1,5 @@
 #include "pnrpc/net_server.h"
+#include "pnrpc/exception.h"
 
 namespace pnrpc {
 
@@ -19,12 +20,18 @@ asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io) {
     if (e.code() == asio::error::eof) {
       //PNRPC_LOG_ERROR("connection is closed by peer");
     } else {
-      PNRPC_LOG_WARN("rpc handle exception : {}", e.what());
+      PNRPC_LOG_WARN("asio exception : {}", e.what());
+      throw;
     }
+  }
+  // 对于PnrpcException类型的异常而言，不需要向外抛出异常，仅记录日志并结束work协程即可。
+  catch (PnrpcException& e) {
+    PNRPC_LOG_WARN("rpc exception : {}", e.what());
   }
   catch (std::exception& e)
   {
-    PNRPC_LOG_WARN("rpc handle exception : {}", e.what());
+    PNRPC_LOG_WARN("unknow exception : {}", e.what());
+    throw;
   }
 }
 
@@ -60,7 +67,7 @@ NetServer::NetServer(std::string ip, uint16_t port, size_t io_num) : io_(), hand
         this->handle_io_[i]->run();
         PNRPC_LOG_INFO("NetServer's handle_io_ {} stop.", i);
       } catch (std::exception& e) {
-        PNRPC_LOG_ERROR("NetServer's handle thread exception : {}", e.what());
+        PNRPC_LOG_ERROR("unknow exception : {}", e.what());
       }
     }));
   }
