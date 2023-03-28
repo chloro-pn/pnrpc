@@ -1,6 +1,6 @@
 #include "sum_stream.h"
 
-asio::awaitable<void> RPCSumStream::process() {
+pnrpc::net::awaitable<void> RPCSumStream::process() {
   std::optional<uint32_t> request;
   uint32_t ret = 0;
   while(true) {

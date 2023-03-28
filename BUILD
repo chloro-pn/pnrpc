@@ -7,10 +7,20 @@ cc_library(
   includes = ["include"],
   deps = [
     "@bridge//:bridge",
-    "@asio//:asio",
     "@spdlog//:spdlog",
     "@token_bucket//:token_bucket",
-  ]
+  ] + select(
+    {
+      "//bazel_config:pnrpc_use_boost_asio" : ["@boost//:asio"],
+      "//conditions:default" : ["@asio//:asio"],
+    }
+  ),
+  defines = select(
+    {
+      "//bazel_config:pnrpc_use_boost_asio" : ["PNRPC_USE_BOOST"],
+      "//conditions:default" : [],
+    }
+  ),
 )
 
 cc_binary(

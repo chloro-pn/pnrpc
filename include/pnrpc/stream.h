@@ -6,7 +6,7 @@
 #include "pnrpc/packager.h"
 #include "pnrpc/log.h"
 #include "pnrpc/exception.h"
-#include "asio.hpp"
+#include "pnrpc/asio_version.h"
 
 #include <memory>
 #include <cassert>
@@ -22,12 +22,12 @@ class StreamBase {
 
   }
 
-  void update_bind_socket(asio::ip::tcp::socket* s) {
+  void update_bind_socket(net::ip::tcp::socket* s) {
     socket_ = s;
   }
 
  protected:
-  asio::awaitable<void> coro_send(const std::string& buf) {
+  net::awaitable<void> coro_send(const std::string& buf) {
     std::string tmp;
     uint32_t length = buf.size();
     if (length >= max_package_size) {
@@ -35,7 +35,7 @@ class StreamBase {
     }
     integralSeri(length, tmp);
     tmp.append(buf);
-    co_await asio::async_write(*socket_, asio::buffer(tmp), asio::use_awaitable);
+    co_await net::async_write(*socket_, net::buffer(tmp), net::use_awaitable);
     co_return;
   }
 
@@ -47,37 +47,37 @@ class StreamBase {
     }
     integralSeri(length, tmp);
     tmp.append(buf);
-    asio::write(*socket_, asio::buffer(tmp));
+    net::write(*socket_, net::buffer(tmp));
   }
 
-  asio::awaitable<std::string> coro_recv() {
+  net::awaitable<std::string> coro_recv() {
     char data[sizeof(uint32_t)];
-    co_await asio::async_read(*socket_, asio::buffer(data), asio::use_awaitable);
+    co_await net::async_read(*socket_, net::buffer(data), net::use_awaitable);
     auto length = integralParse<uint32_t>(data);
     if (length >= max_package_size) {
       throw PnrpcException("package is too large : " + std::to_string(length));
     }
     std::string buf;
     buf.resize(length);
-    co_await asio::async_read(*socket_, asio::buffer(buf), asio::use_awaitable);
+    co_await net::async_read(*socket_, net::buffer(buf), net::use_awaitable);
     co_return buf;
   }
 
   std::string recv() {
     char data[sizeof(uint32_t)];
-    asio::read(*socket_, asio::buffer(data));
+    net::read(*socket_, net::buffer(data));
     auto length = integralParse<uint32_t>(data);
     if (length >= max_package_size) {
       throw PnrpcException("package is too large : " + std::to_string(length));
     }
     std::string buf;
     buf.resize(length);
-    asio::read(*socket_, asio::buffer(buf));
+    net::read(*socket_, net::buffer(buf));
     return buf;
   }
 
  private:
-  asio::ip::tcp::socket* socket_;
+  net::ip::tcp::socket* socket_;
 };
 
 template <typename RpcType> requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value
@@ -87,7 +87,7 @@ class ClientToServerStream : public StreamBase {
 
   }
 
-  asio::awaitable<void> Send(const RpcType& package, bool eof) {
+  net::awaitable<void> Send(const RpcType& package, bool eof) {
     std::string buf;
     RequestPackager<RpcType> rp;
     rp.seri_request_package(package, buf, pcode_, eof);
@@ -102,7 +102,7 @@ class ClientToServerStream : public StreamBase {
     send(buf);
   }
 
-  asio::awaitable<std::optional<RpcType>> Read() {
+  net::awaitable<std::optional<RpcType>> Read() {
     if (set_init_package_ == true) {
       set_init_package_ = false;
       co_return std::move(pkg_);
@@ -162,7 +162,7 @@ class ClientToServerStream<void> : public StreamBase {
 
   }
 
-  asio::awaitable<std::string_view> Read() {
+  net::awaitable<std::string_view> Read() {
     std::string buf = co_await coro_recv();
     RequestPackager<void> rp;
     co_return rp.parse_request_package(buf, pcode_, eof_);
@@ -188,7 +188,7 @@ class ServerToClientStream : public StreamBase {
 
   }
 
-  asio::awaitable<void> Send(const RpcType& package, uint32_t ret_code, bool eof) {
+  net::awaitable<void> Send(const RpcType& package, uint32_t ret_code, bool eof) {
     std::string buf;
     ResponsePackager<RpcType> rp;
     rp.seri_response_package(package, buf, ret_code, eof);
@@ -203,7 +203,7 @@ class ServerToClientStream : public StreamBase {
     send(buf);
   }
 
-  asio::awaitable<std::optional<RpcType>> Read(uint32_t& ret_code, std::string& err_msg) {
+  net::awaitable<std::optional<RpcType>> Read(uint32_t& ret_code, std::string& err_msg) {
     if (read_eof_ == true) {
       co_return std::optional<RpcType>();
     }
@@ -230,7 +230,7 @@ class ServerToClientStream : public StreamBase {
   }
 
  private:
-  asio::ip::tcp::socket* socket_;
+  net::ip::tcp::socket* socket_;
   bool read_eof_;
 };
 
@@ -240,7 +240,7 @@ class ErrorStream : public StreamBase {
 
   }
 
-  asio::awaitable<void> SendErrorMsg(const std::string& err_msg, uint32_t ret_code) {
+  net::awaitable<void> SendErrorMsg(const std::string& err_msg, uint32_t ret_code) {
     std::string buf;
     ResponsePackager<void> rp;
     rp.seri_error_package(err_msg, ret_code, buf);

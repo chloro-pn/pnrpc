@@ -1,7 +1,7 @@
 #include "sum.h"
 #include "pnrpc/token_bucket.h"
 
-asio::awaitable<void> RPCSum::process() {
+pnrpc::net::awaitable<void> RPCSum::process() {
   auto request = (co_await get_request_arg()).value();
   uint32_t resp = 0;
   for(const auto& each : request.nums) {

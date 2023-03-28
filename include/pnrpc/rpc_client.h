@@ -9,8 +9,7 @@
 #include "pnrpc/rpc_concept.h"
 #include "pnrpc/util.h"
 #include "pnrpc/rpc_ret_code.h"
-
-#include "asio.hpp"
+#include "pnrpc/asio_version.h"
 
 namespace pnrpc {
 
@@ -21,7 +20,7 @@ class RpcStubBase {
    using request_t = RequestType;
    using response_t = ResponseType;
 
-   RpcStubBase(asio::io_context& io, const std::string& ip, uint16_t port) : io_(io),
+   RpcStubBase(net::io_context& io, const std::string& ip, uint16_t port) : io_(io),
                                                                              socket_(io_),
                                                                              ip_(ip),
                                                                              port_(port),
@@ -31,21 +30,21 @@ class RpcStubBase {
     response_stream.update_bind_socket(&socket_);
    }
 
-  asio::awaitable<asio::ip::tcp::endpoint> async_connect() {
-    asio::ip::tcp::resolver resolver(io_);
+  net::awaitable<net::ip::tcp::endpoint> async_connect() {
+    net::ip::tcp::resolver resolver(io_);
     auto ep = resolver.resolve(ip_, std::to_string(port_));
-    co_return co_await asio::async_connect(socket_, ep, asio::use_awaitable);
+    co_return co_await net::async_connect(socket_, ep, net::use_awaitable);
   }
 
-  asio::ip::tcp::endpoint connect() {
-    asio::ip::tcp::resolver resolver(io_);
+  net::ip::tcp::endpoint connect() {
+    net::ip::tcp::resolver resolver(io_);
     auto ep = resolver.resolve(ip_, std::to_string(port_));
-    return asio::connect(socket_, ep);
+    return net::connect(socket_, ep);
   }
 
  private:
-  asio::io_context& io_;
-  asio::ip::tcp::socket socket_;
+  net::io_context& io_;
+  net::ip::tcp::socket socket_;
   std::string ip_;
   uint16_t port_;
 
@@ -60,9 +59,9 @@ class RpcStub : public RpcStubBase<RequestType, ResponseType, pcode> {
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
 
-  RpcStub(asio::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port) {}
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port) {}
 
-  asio::awaitable<int> rpc_call_coro(const request_t& r, response_t& response) {
+  net::awaitable<int> rpc_call_coro(const request_t& r, response_t& response) {
     co_await this->request_stream.Send(r, true);
     uint32_t ret_code = 0;
     std::string err_msg;
@@ -101,9 +100,9 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
 
-  RpcStub(asio::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false), recved_(false) {}
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false), recved_(false) {}
 
-  asio::awaitable<int> send_request(const request_t& request, bool eof = false) {
+  net::awaitable<int> send_request(const request_t& request, bool eof = false) {
     if (send_eof_ == true) {
       co_return RPC_SEND_AFTER_EOF;
     }
@@ -121,7 +120,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
     return RPC_OK;
   }
 
-  asio::awaitable<int> recv_response(response_t& response) {
+  net::awaitable<int> recv_response(response_t& response) {
     if (send_eof_ == false) {
       co_return  RPC_RECV_BEFORE_EOF;
     }
@@ -174,9 +173,9 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
   
-  RpcStub(asio::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
 
-  asio::awaitable<int> send_request(const request_t& request) {
+  net::awaitable<int> send_request(const request_t& request) {
     if (send_eof_ == true) {
       co_return RPC_SEND_AFTER_EOF;
     }
@@ -194,7 +193,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
     return RPC_OK;
   }
 
-  asio::awaitable<int> recv_response(std::optional<response_t>& response) {
+  net::awaitable<int> recv_response(std::optional<response_t>& response) {
     if (send_eof_ == false) {
       co_return  RPC_RECV_BEFORE_EOF;
     }
@@ -230,9 +229,9 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : publi
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
 
-  RpcStub(asio::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
 
-  asio::awaitable<int> send_request(const request_t& request, bool eof = false) {
+  net::awaitable<int> send_request(const request_t& request, bool eof = false) {
     if (send_eof_ == true) {
       co_return RPC_SEND_AFTER_EOF;
     }
@@ -250,7 +249,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : publi
     return RPC_OK;
   }
 
-  asio::awaitable<int> recv_response(std::optional<response_t>& response) {
+  net::awaitable<int> recv_response(std::optional<response_t>& response) {
     if (send_eof_ == false) {
       co_return  RPC_RECV_BEFORE_EOF;
     }

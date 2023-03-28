@@ -3,7 +3,7 @@
 
 namespace pnrpc {
 
-asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io) {
+net::awaitable<void> work(net::ip::tcp::socket socket, net::io_context& io) {
   try {
     for (;;) {
       auto handle_info = co_await RpcServer::Instance().HandleRequest(io, std::move(socket));
@@ -16,8 +16,8 @@ asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io) {
         static_cast<void*>(handle_info.bind_ctx));
     }
   }
-  catch (asio::system_error& e) {
-    if (e.code() == asio::error::eof) {
+  catch (system_error& e) {
+    if (e.code() == net::error::eof) {
       //PNRPC_LOG_ERROR("connection is closed by peer");
     } else {
       PNRPC_LOG_WARN("asio exception : {}", e.what());
@@ -35,19 +35,19 @@ asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io) {
   }
 }
 
-asio::awaitable<void> listener(const std::string& ip, uint16_t port, asio::io_context& io, std::vector<std::unique_ptr<asio::io_context>>& handle_io) {
-  auto executor = co_await asio::this_coro::executor;
-  asio::ip::tcp::endpoint ep(asio::ip::address::from_string(ip), port);
-  asio::ip::tcp::acceptor acceptor(executor, ep);
+net::awaitable<void> listener(const std::string& ip, uint16_t port, net::io_context& io, std::vector<std::unique_ptr<net::io_context>>& handle_io) {
+  auto executor = co_await net::this_coro::executor;
+  net::ip::tcp::endpoint ep(net::ip::address::from_string(ip), port);
+  net::ip::tcp::acceptor acceptor(executor, ep);
   size_t handle_io_index = 0;
   for (;;) {
-    asio::ip::tcp::socket socket = co_await acceptor.async_accept(asio::use_awaitable);
+    net::ip::tcp::socket socket = co_await acceptor.async_accept(net::use_awaitable);
     if (handle_io.empty()) {
-      asio::co_spawn(executor, work(std::move(socket), io), asio::detached);
+      net::co_spawn(executor, work(std::move(socket), io), net::detached);
     } else {
       // 按照轮询的方式将请求分派给handle_io。
-      asio::io_context& hio = *handle_io[handle_io_index];
-      asio::co_spawn(hio, work(rebind_ctx(std::move(socket), hio), hio), asio::detached);
+      net::io_context& hio = *handle_io[handle_io_index];
+      net::co_spawn(hio, work(rebind_ctx(std::move(socket), hio), hio), net::detached);
       handle_io_index += 1;
       if (handle_io_index >= handle_io.size()) {
         handle_io_index = 0;
@@ -58,12 +58,12 @@ asio::awaitable<void> listener(const std::string& ip, uint16_t port, asio::io_co
 
 NetServer::NetServer(std::string ip, uint16_t port, size_t io_num) : io_(), handle_io_(), ip_(ip), port_(port) {
   for(size_t i = 0; i < io_num; ++i) {
-    handle_io_.emplace_back(std::make_unique<asio::io_context>());
+    handle_io_.emplace_back(std::make_unique<net::io_context>());
   }
   for(size_t i = 0; i < io_num; ++i) {
     handle_thread_.emplace_back(std::thread([this, i]()->void {
       try {
-        auto work = asio::make_work_guard(*this->handle_io_[i]);
+        auto work = net::make_work_guard(*this->handle_io_[i]);
         this->handle_io_[i]->run();
         PNRPC_LOG_INFO("NetServer's handle_io_ {} stop.", i);
       } catch (std::exception& e) {

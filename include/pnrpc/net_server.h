@@ -1,7 +1,6 @@
 #pragma once
 
-#include "asio.hpp"
-
+#include "pnrpc/asio_version.h"
 #include "pnrpc/rpc_server.h"
 #include "pnrpc/util.h"
 #include "pnrpc/log.h"
@@ -15,10 +14,10 @@
 
 namespace pnrpc {
 
-asio::awaitable<void> work(asio::ip::tcp::socket socket, asio::io_context& io);
+net::awaitable<void> work(net::ip::tcp::socket socket, net::io_context& io);
 
 
-asio::awaitable<void> listener(const std::string& ip, uint16_t port, asio::io_context& io, std::vector<std::unique_ptr<asio::io_context>>& handle_io);
+net::awaitable<void> listener(const std::string& ip, uint16_t port, net::io_context& io, std::vector<std::unique_ptr<net::io_context>>& handle_io);
 
 class NetServer {
  public:
@@ -26,7 +25,7 @@ class NetServer {
 
   void run() {
     try {
-      co_spawn(io_, listener(ip_, port_, io_, handle_io_), asio::detached);
+      co_spawn(io_, listener(ip_, port_, io_, handle_io_), net::detached);
       io_.run();
     } catch (std::exception& e) {
       PNRPC_LOG_ERROR("unknow exception : {}", e.what());
@@ -51,8 +50,8 @@ class NetServer {
   }
 
  private:
-  asio::io_context io_;
-  std::vector<std::unique_ptr<asio::io_context>> handle_io_;
+  net::io_context io_;
+  std::vector<std::unique_ptr<net::io_context>> handle_io_;
   std::vector<std::thread> handle_thread_;
   std::string ip_;
   uint16_t port_;

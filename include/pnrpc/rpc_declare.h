@@ -12,14 +12,14 @@ class RPC ## funcname : public pnrpc::RpcProcessor<request_t, response_t, pcode,
 \
 class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pcode, rpc_type> { \
  public: \
-  RPC ## funcname ## STUB (asio::io_context& io, const std::string& ip, uint16_t port) : pnrpc::RpcStub<request_t, response_t, pcode, rpc_type>(io, ip, port) {} \
+  RPC ## funcname ## STUB (pnrpc::net::io_context& io, const std::string& ip, uint16_t port) : pnrpc::RpcStub<request_t, response_t, pcode, rpc_type>(io, ip, port) {} \
 }; \
 
 #define OVERRIDE_BIND \
-  asio::io_context* bind_io_context() override;
+  pnrpc::net::io_context* bind_io_context() override;
 
 #define OVERRIDE_PROCESS \
-  asio::awaitable<void> process() override;
+  pnrpc::net::awaitable<void> process() override;
 
 #define OVERRIDE_RESTRICTOR \
   bool restrictor() override;

@@ -27,9 +27,9 @@ int main() {
 
   std::thread ctx_th([] {
     try {
-      global_default_ctx.reset(new asio::io_context());
+      global_default_ctx.reset(new pnrpc::net::io_context());
       PNRPC_LOG_INFO("global_default_ctx's address is {}", static_cast<void*>(global_default_ctx.get()))
-      auto work = asio::make_work_guard(*global_default_ctx);
+      auto work = pnrpc::net::make_work_guard(*global_default_ctx);
       global_default_ctx->run();
       PNRPC_LOG_INFO("global_default_ctx stop.");
     } catch (std::exception& e) {
@@ -38,7 +38,7 @@ int main() {
   });
   // 等待服务器启动完成
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  asio::io_context io;
+  pnrpc::net::io_context io;
 
   RPCEchoSTUB echo_client(io, "127.0.0.1", 44444);
   echo_client.connect();
@@ -47,7 +47,7 @@ int main() {
   assert(ret_code == RPC_OK);
   assert(resp == "helloworld");
   
-  asio::co_spawn(io, [&io]() -> asio::awaitable<void> {
+  pnrpc::net::co_spawn(io, [&io]() -> pnrpc::net::awaitable<void> {
     RPCSumStreamSTUB sum_client(io, "127.0.0.1", 44444);
     co_await sum_client.async_connect();
     for(uint32_t x = 0; x < 3; ++x) {
@@ -58,9 +58,9 @@ int main() {
     int ret_code = co_await sum_client.recv_response(resp);;
     assert(resp == 0 + 1 + 2 + 3);
     assert(ret_code == RPC_OK);
-  }, asio::detached);
+  }, pnrpc::net::detached);
 
-  asio::co_spawn(io, [&io]() -> asio::awaitable<void> {
+  pnrpc::net::co_spawn(io, [&io]() -> pnrpc::net::awaitable<void> {
     RPCDownloadSTUB client(io, "127.0.0.1", 44444);
     co_await client.async_connect();
     co_await client.send_request("test.txt");
@@ -70,7 +70,7 @@ int main() {
       tmp += response.value();
     }
     assert(tmp == "helloworld");
-  }, asio::detached);
+  }, pnrpc::net::detached);
   
 
   io.run();

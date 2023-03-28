@@ -17,9 +17,7 @@
 #include "pnrpc/rpc_type_creator.h"
 #include "pnrpc/stream.h"
 #include "bridge/object.h"
-#include "asio.hpp"
-
-#include "asio/dispatch.hpp"
+#include "pnrpc/asio_version.h"
 
 namespace pnrpc {
 
@@ -34,7 +32,7 @@ class RpcProcessorBase {
 
   }
 
-  asio::io_context& get_io_context() {
+  net::io_context& get_io_context() {
     assert(running_io_ != nullptr);
     return *running_io_;
   }
@@ -44,18 +42,18 @@ class RpcProcessorBase {
   RpcType get_rpc_type() const { return rpc_type_; }
 
  protected:
-  void set_io_context(asio::io_context& io) {
+  void set_io_context(net::io_context& io) {
     running_io_ = &io;
   }
 
   virtual void create_request_from_raw_bytes(std::string_view request_view, bool eof) = 0;
 
-  virtual asio::awaitable<void> process() = 0;
+  virtual net::awaitable<void> process() = 0;
 
-  virtual void bind_net(asio::ip::tcp::socket& s, asio::io_context& io_context) = 0;
+  virtual void bind_net(net::ip::tcp::socket& s, net::io_context& io_context) = 0;
 
   // 用户可以通过重写此方法将本rpc分配给自定义的handle_io处理
-  virtual asio::io_context* bind_io_context() {
+  virtual net::io_context* bind_io_context() {
     return nullptr;
   }
 
@@ -68,7 +66,7 @@ class RpcProcessorBase {
  private:
   size_t code;
   RpcType rpc_type_;
-  asio::io_context* running_io_;
+  net::io_context* running_io_;
 };
 
 class RpcServer {
@@ -80,8 +78,8 @@ class RpcServer {
     std::string err_msg = "";
     uint32_t pcode = 0;
     double process_ms = 0.0;
-    asio::io_context* bind_ctx = nullptr;
-    std::unique_ptr<asio::ip::tcp::socket> socket;
+    net::io_context* bind_ctx = nullptr;
+    std::unique_ptr<net::ip::tcp::socket> socket;
   };
 
   static RpcServer& Instance() {
@@ -96,7 +94,7 @@ class RpcServer {
     funcs_[pcode] = std::move(cf);
   }
 
-  asio::awaitable<HandleInfo> HandleRequest(asio::io_context& io, asio::ip::tcp::socket socket) {
+  net::awaitable<HandleInfo> HandleRequest(net::io_context& io, net::ip::tcp::socket socket) {
     HandleInfo handle_info;
 
     ClientToServerStream<void> ctss;
@@ -118,7 +116,7 @@ class RpcServer {
         handle_info.bind_ctx = bind_ctx;
         socket = rebind_ctx(std::move(socket), *bind_ctx);
         processor->bind_net(socket, *bind_ctx);
-        co_await asio::dispatch(asio::bind_executor(*bind_ctx, asio::use_awaitable));
+        co_await net::dispatch(net::bind_executor(*bind_ctx, net::use_awaitable));
       }
       // 在调度到执行本rpc的io_context上之后进行限流判定，这意味着可以通过请求信息、io_context信息等做更细粒度的限流
       bool overload = !processor->restrictor();
@@ -139,7 +137,7 @@ class RpcServer {
       es.update_bind_socket(&socket);
       co_await es.SendErrorMsg(handle_info.err_msg, handle_info.ret_code);
     }
-    handle_info.socket = std::make_unique<asio::ip::tcp::socket>(std::move(socket));
+    handle_info.socket = std::make_unique<net::ip::tcp::socket>(std::move(socket));
     co_return handle_info;
   }
 
@@ -169,9 +167,9 @@ class RpcProcessor : public RpcProcessorBase {
     request_stream.set_init_package(std::move(request), eof);
   }
 
-  virtual asio::awaitable<void> process() = 0;
+  virtual net::awaitable<void> process() = 0;
 
-  void bind_net(asio::ip::tcp::socket& s, asio::io_context& io_context) override {
+  void bind_net(net::ip::tcp::socket& s, net::io_context& io_context) override {
     request_stream.update_bind_socket(&s);
     response_stream.update_bind_socket(&s);
     set_io_context(io_context);
@@ -182,7 +180,7 @@ class RpcProcessor : public RpcProcessorBase {
 
   explicit RpcProcessor() : RpcProcessorBase(pcode, rpc_type), request_stream(pcode), response_stream(), request_count_(0), response_eof_(false), response_count_(0) {}
 
-  asio::awaitable<std::optional<request_t>> get_request_arg() {
+  net::awaitable<std::optional<request_t>> get_request_arg() {
     if (get_rpc_type() == RpcType::Simple || get_rpc_type() == RpcType::ServerSideStream) {
       if (request_count_ >= 1) {
         PNRPC_LOG_WARN("rpc {} request_count_ == {}", pcode, request_count_);
@@ -193,7 +191,7 @@ class RpcProcessor : public RpcProcessorBase {
     co_return co_await get_request_stream().Read();
   }
 
-  asio::awaitable<void> set_response_arg(const response_t& r, bool eof) {
+  net::awaitable<void> set_response_arg(const response_t& r, bool eof) {
     if (response_eof_ == true) {
       PNRPC_LOG_WARN("rpc {} repeatedly set eof", pcode);
       co_return;

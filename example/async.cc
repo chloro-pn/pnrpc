@@ -10,8 +10,9 @@
 #include <cassert>
 #include <variant>
 
-#include "asio/experimental/awaitable_operators.hpp"
-using namespace asio::experimental::awaitable_operators;
+#include "pnrpc/asio_version.h"
+
+using namespace pnrpc::net::experimental::awaitable_operators;
 
 struct AsyncTaskHandlerMock {
   using call_back_t = std::function<void(std::string)>;
@@ -53,7 +54,7 @@ struct AsyncTaskHandlerMock {
   std::vector<std::string> args_;
 };
 
-asio::awaitable<void> RPCAsync::process() {
+pnrpc::net::awaitable<void> RPCAsync::process() {
   auto request = co_await get_request_arg();
   AsyncTaskHandlerMock at;
   auto request_task = [request_str = request.value(), &at](std::function<void(std::string)>&& rf) mutable -> void {
@@ -67,7 +68,7 @@ asio::awaitable<void> RPCAsync::process() {
   std::string resp;
   std::variant<int, std::monostate> results = co_await (
     echo_client.rpc_call_coro("hello world", resp)
-    || asio::steady_timer(get_io_context(), std::chrono::seconds(2)).async_wait(asio::use_awaitable)
+    || pnrpc::net::steady_timer(get_io_context(), std::chrono::seconds(2)).async_wait(pnrpc::net::use_awaitable)
   );
   if (results.index() == 0 && std::get<0>(results) == RPC_OK) {
     response = response + ", " + resp;
