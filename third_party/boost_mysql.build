@@ -1,0 +1,29 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_import(
+  name = "openssl",
+  includes = ["third_party"],
+  hdrs = glob(["openssl/**/*.h"]),
+  static_library = "third_party/libssl.a",
+)
+
+cc_library(
+  name = "mysql",
+  hdrs = glob(["include/boost/**/*.hpp", "include/boost/**/*.ipp"]),
+  includes = ["include"],
+  deps = [
+    "@boost//:asio_ssl",
+    "@boost//:assert",
+    "@boost//:config",
+    "@boost//:core",
+    "@boost//:endian",
+    "@boost//:lexical_cast",
+    "@boost//:mp11",
+    "@boost//:system",
+    "@boost//:throw_exception",
+    "@boost//:variant2",
+  ],
+  linkopts = [
+    "-pthread"
+  ]
+)

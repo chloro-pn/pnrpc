@@ -41,6 +41,13 @@ new_git_repository(
   build_file = "//third_party:token_bucket.build",
 )
 
+new_git_repository(
+  name = "mysql",
+  remote = "https://github.com/boostorg/mysql",
+  branch = "master",
+  build_file = "//third_party:boost_mysql.build",
+)
+
 http_archive(
   name = "com_github_nelhage_rules_boost",
 

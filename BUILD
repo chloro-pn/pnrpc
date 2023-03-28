@@ -34,10 +34,20 @@ cc_binary(
 
 cc_test(
   name = "test",
-  srcs = glob(["test/*.cc"]),
+  srcs = glob(["test/*.cc"], exclude = ["test/mysql_test.cc"]) + select(
+    {
+      "//bazel_config:pnrpc_use_boost_mysql" : ["test/mysql_test.cc"],
+      "//conditions:default" : [],
+    }
+  ),
   deps = [
     "@bridge//:bridge",
     "@googletest//:gtest",
     "@googletest//:gtest_main",
-  ]
+  ] + select(
+    {
+      "//bazel_config:pnrpc_use_boost_mysql" : ["@mysql//:mysql"],
+      "//conditions:default" : [],
+    }
+  )
 )
