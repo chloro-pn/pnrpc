@@ -1,0 +1,16 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+  name = "redis",
+  hdrs = glob(["include/boost/**/*.hpp", "include/boost/**/*.ipp"]),
+  includes = ["include"],
+  deps = [
+    "@boost//:asio",
+    "@boost//:assert",
+    "@boost//:config",
+    "@boost//:core",
+    "@boost//:mp11",
+    "@boost//:system",
+    "@boost//:utility",
+  ],
+)

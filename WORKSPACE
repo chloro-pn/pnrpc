@@ -48,6 +48,13 @@ new_git_repository(
   build_file = "//third_party:boost_mysql.build",
 )
 
+new_git_repository(
+  name = "redis",
+  remote = "https://github.com/boostorg/redis",
+  branch = "master",
+  build_file = "//third_party:boost_redis.build",
+)
+
 http_archive(
   name = "com_github_nelhage_rules_boost",
 
