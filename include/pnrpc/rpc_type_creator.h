@@ -31,15 +31,25 @@ struct RpcCreator<std::string> {
   }
 };
 
-template<>
-struct RpcCreator<uint32_t> {
-  static uint32_t create(const char* ptr, size_t len) {
-    return integralParse<uint32_t>(ptr, len);
-  }
-
-  static void to_raw_bytes(const uint32_t& request, std::string& appender) {
-    integralSeri(request, appender);
-  }
+#define SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(integral_type) \
+template<> \
+struct RpcCreator<integral_type> { \
+  static integral_type create(const char* ptr, size_t len) { \
+    return integralParse<integral_type>(ptr, len); \
+  } \
+\
+  static void to_raw_bytes(const integral_type& request, std::string& appender) { \
+    integralSeri(request, appender); \
+  } \
 };
+
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(uint8_t)
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(int8_t)
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(uint16_t)
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(int16_t)
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(uint32_t)
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(int32_t)
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(uint64_t)
+SPECIALIZATION_INTEGRAL_TYPE_FOR_RPC_CREATOR(int64_t)
 
 }

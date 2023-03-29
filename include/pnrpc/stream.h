@@ -16,9 +16,10 @@
 
 namespace pnrpc {
 
+// todo: 记录流上的读取、写入的字节数，记录收发包的开始结束时间等等统计信息
 class StreamBase {
  public:
-  StreamBase() : socket_(nullptr) {
+  StreamBase() : socket_(nullptr), write_bytes_(0), read_bytes_(0) {
 
   }
 
@@ -35,6 +36,7 @@ class StreamBase {
     }
     integralSeri(length, tmp);
     tmp.append(buf);
+    write_bytes_ += tmp.size();
     co_await net::async_write(*socket_, net::buffer(tmp), net::use_awaitable);
     co_return;
   }
@@ -47,6 +49,7 @@ class StreamBase {
     }
     integralSeri(length, tmp);
     tmp.append(buf);
+    write_bytes_ += tmp.size();
     net::write(*socket_, net::buffer(tmp));
   }
 
@@ -59,6 +62,7 @@ class StreamBase {
     }
     std::string buf;
     buf.resize(length);
+    read_bytes_ = read_bytes_ + sizeof(uint32_t) + length;
     co_await net::async_read(*socket_, net::buffer(buf), net::use_awaitable);
     co_return buf;
   }
@@ -72,22 +76,30 @@ class StreamBase {
     }
     std::string buf;
     buf.resize(length);
+    read_bytes_ = read_bytes_ + sizeof(uint32_t) + length;
     net::read(*socket_, net::buffer(buf));
     return buf;
   }
 
  private:
   net::ip::tcp::socket* socket_;
+  size_t write_bytes_;
+  size_t read_bytes_;
 };
 
 template <typename RpcType> requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value
 class ClientToServerStream : public StreamBase {
  public:
-  explicit ClientToServerStream(uint32_t pcode) : StreamBase(), set_init_package_(false), pcode_(pcode), read_eof_(false) {
+  explicit ClientToServerStream(uint32_t pcode) : StreamBase(), set_init_package_(false), pcode_(pcode), read_eof_(false), send_eof_(false) {
 
   }
 
   net::awaitable<void> Send(const RpcType& package, bool eof) {
+    if (send_eof_ == true) {
+      PNRPC_LOG_WARN("ClientToServerStream send package after send_eof");
+      co_return;
+    }
+    send_eof_ = eof;
     std::string buf;
     RequestPackager<RpcType> rp;
     rp.seri_request_package(package, buf, pcode_, eof);
@@ -96,6 +108,11 @@ class ClientToServerStream : public StreamBase {
   }
 
   void SendSync(const RpcType& package, bool eof) {
+    if (send_eof_ == true) {
+      PNRPC_LOG_WARN("ClientToServerStream send package after send_eof");
+      return;
+    }
+    send_eof_ = eof;
     std::string buf;
     RequestPackager<RpcType> rp;
     rp.seri_request_package(package, buf, pcode_, eof);
@@ -148,11 +165,18 @@ class ClientToServerStream : public StreamBase {
     read_eof_ = eof;
   }
 
+  ~ClientToServerStream() {
+    if (read_eof_ == false || send_eof_ == false) {
+      PNRPC_LOG_WARN("ClientToServerStream error, read_eof = {}, send_eof = {}", read_eof_, send_eof_);
+    }
+  }
+
  private:
   RpcType pkg_;
   bool set_init_package_;
   uint32_t pcode_;
   bool read_eof_;
+  bool send_eof_;
 };
 
 template <>
@@ -184,11 +208,16 @@ class ClientToServerStream<void> : public StreamBase {
 template <typename RpcType> requires RpcTypeConcept<RpcType>
 class ServerToClientStream : public StreamBase {
  public:
-  explicit ServerToClientStream() : StreamBase(), read_eof_(false) {
+  explicit ServerToClientStream() : StreamBase(), read_eof_(false), send_eof_(false) {
 
   }
 
   net::awaitable<void> Send(const RpcType& package, uint32_t ret_code, bool eof) {
+    if (send_eof_ == true) {
+      PNRPC_LOG_WARN("ServerToClientStream send package after send_eof");
+      co_return;
+    }
+    send_eof_ = eof;
     std::string buf;
     ResponsePackager<RpcType> rp;
     rp.seri_response_package(package, buf, ret_code, eof);
@@ -197,6 +226,11 @@ class ServerToClientStream : public StreamBase {
   }
 
   void SendSync(const RpcType& package, uint32_t ret_code, bool eof) {
+    if (send_eof_ == true) {
+      PNRPC_LOG_WARN("ServerToClientStream send package after send_eof");
+      return;
+    }
+    send_eof_ = eof;
     std::string buf;
     ResponsePackager<RpcType> rp;
     rp.seri_response_package(package, buf, ret_code, eof);
@@ -229,9 +263,16 @@ class ServerToClientStream : public StreamBase {
     return std::move(pkg.response);
   }
 
+  ~ServerToClientStream() {
+    if (read_eof_ == false || send_eof_ == false) {
+      PNRPC_LOG_WARN("ServerToClientStream error, read_eof = {}, send_eof = {}", read_eof_, send_eof_);
+    }
+  }
+
  private:
   net::ip::tcp::socket* socket_;
   bool read_eof_;
+  bool send_eof_;
 };
 
 class ErrorStream : public StreamBase {
