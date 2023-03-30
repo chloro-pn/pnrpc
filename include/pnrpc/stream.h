@@ -7,16 +7,26 @@
 #include "pnrpc/log.h"
 #include "pnrpc/exception.h"
 #include "pnrpc/asio_version.h"
+#include "pnrpc/current_limiting.h"
 
 #include <memory>
 #include <cassert>
 #include <string>
 #include <string_view>
 #include <optional>
+#include <chrono>
+#include <thread>
 
 namespace pnrpc {
 
-// todo: 记录流上的读取、写入的字节数，记录收发包的开始结束时间等等统计信息
+/*
+ * 类StreamBase封装了对socket上的数据流读写的操作，有如下特点：
+ *  支持运行时切换socket；
+ *  提供对流式数据的分包；
+ *  记录在该socket上的一些统计数据（读写字节数、开始和结束的时间（todo））；
+ *  支持同步阻塞式和协程式的接口；
+ *  支持对读写操作的限流;
+ */
 class StreamBase {
  public:
   StreamBase() : socket_(nullptr), write_bytes_(0), read_bytes_(0) {
@@ -25,6 +35,14 @@ class StreamBase {
 
   void update_bind_socket(net::ip::tcp::socket* s) {
     socket_ = s;
+  }
+
+  void update_read_limiting(size_t up_water) {
+    read_limiting_.update_up_water_level(up_water);
+  }
+
+  void update_write_limiting(size_t up_water) {
+    write_limiting_.update_up_water_level(up_water);
   }
 
  protected:
@@ -36,8 +54,13 @@ class StreamBase {
     }
     integralSeri(length, tmp);
     tmp.append(buf);
-    write_bytes_ += tmp.size();
+    size_t sleep_s = write_limiting_.calcualte_sleep_time(write_bytes_);
+    if (sleep_s != 0) {
+      net::steady_timer timer(co_await net::this_coro::executor, std::chrono::seconds(sleep_s));
+      co_await timer.async_wait(net::use_awaitable);
+    }
     co_await net::async_write(*socket_, net::buffer(tmp), net::use_awaitable);
+    write_bytes_ += tmp.size();
     co_return;
   }
 
@@ -49,8 +72,12 @@ class StreamBase {
     }
     integralSeri(length, tmp);
     tmp.append(buf);
-    write_bytes_ += tmp.size();
+    size_t sleep_s = write_limiting_.calcualte_sleep_time(write_bytes_);
+    if (sleep_s != 0) {
+      std::this_thread::sleep_for(std::chrono::seconds(sleep_s));
+    }
     net::write(*socket_, net::buffer(tmp));
+    write_bytes_ += tmp.size();
   }
 
   net::awaitable<std::string> coro_recv() {
@@ -62,8 +89,13 @@ class StreamBase {
     }
     std::string buf;
     buf.resize(length);
-    read_bytes_ = read_bytes_ + sizeof(uint32_t) + length;
+    size_t sleep_s = read_limiting_.calcualte_sleep_time(read_bytes_);
+    if (sleep_s != 0) {
+      net::steady_timer timer(co_await net::this_coro::executor, std::chrono::seconds(sleep_s));
+      co_await timer.async_wait(net::use_awaitable);
+    }
     co_await net::async_read(*socket_, net::buffer(buf), net::use_awaitable);
+    read_bytes_ = read_bytes_ + sizeof(uint32_t) + length;
     co_return buf;
   }
 
@@ -76,8 +108,12 @@ class StreamBase {
     }
     std::string buf;
     buf.resize(length);
-    read_bytes_ = read_bytes_ + sizeof(uint32_t) + length;
+    size_t sleep_s = read_limiting_.calcualte_sleep_time(read_bytes_);
+    if (sleep_s != 0) {
+      std::this_thread::sleep_for(std::chrono::seconds(sleep_s));
+    }
     net::read(*socket_, net::buffer(buf));
+    read_bytes_ = read_bytes_ + sizeof(uint32_t) + length;
     return buf;
   }
 
@@ -85,6 +121,8 @@ class StreamBase {
   net::ip::tcp::socket* socket_;
   size_t write_bytes_;
   size_t read_bytes_;
+  CurrentLimiting read_limiting_;
+  CurrentLimiting write_limiting_;
 };
 
 template <typename RpcType> requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value
@@ -165,12 +203,6 @@ class ClientToServerStream : public StreamBase {
     read_eof_ = eof;
   }
 
-  ~ClientToServerStream() {
-    if (read_eof_ == false || send_eof_ == false) {
-      PNRPC_LOG_WARN("ClientToServerStream error, read_eof = {}, send_eof = {}", read_eof_, send_eof_);
-    }
-  }
-
  private:
   RpcType pkg_;
   bool set_init_package_;
@@ -186,8 +218,8 @@ class ClientToServerStream<void> : public StreamBase {
 
   }
 
-  net::awaitable<std::string_view> Read() {
-    std::string buf = co_await coro_recv();
+  net::awaitable<std::string_view> Read(std::string& buf) {
+    buf = co_await coro_recv();
     RequestPackager<void> rp;
     co_return rp.parse_request_package(buf, pcode_, eof_);
   }
@@ -261,12 +293,6 @@ class ServerToClientStream : public StreamBase {
     err_msg = pkg.err_msg;
     read_eof_ = pkg.eof;
     return std::move(pkg.response);
-  }
-
-  ~ServerToClientStream() {
-    if (read_eof_ == false || send_eof_ == false) {
-      PNRPC_LOG_WARN("ServerToClientStream error, read_eof = {}, send_eof = {}", read_eof_, send_eof_);
-    }
   }
 
  private:

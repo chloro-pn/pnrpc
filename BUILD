@@ -59,6 +59,7 @@ cc_test(
   ),
   includes = ["test"],
   deps = [
+    ":pnrpc",
     "@bridge//:bridge",
     "@googletest//:gtest",
     "@googletest//:gtest_main",

@@ -57,11 +57,25 @@ class RpcProcessorBase {
     return nullptr;
   }
 
+  // 用户可以通过重写此方法对从客户端读取数据做限流, 单位 字节 / 秒
+  virtual size_t get_request_current_limiting() {
+    return 0;
+  }
+
+  // 用户可以通过重写此方法对向客户端写回数据做限流, 单位 字节 / 秒
+  virtual size_t get_response_current_limiting() {
+    return 0;
+  }
+
   // 用户可以通过重写此方法实现限流算法。注意：
   // 每个RpcProcessorBase对象只负责处理一次rpc请求，因此需要将限流信息存储在生命周期更长的对象中而不是RpcProcessorBase对象中。
   virtual bool restrictor() {
     return true;
   }
+
+  virtual void update_request_current_limiting(size_t uwl) = 0;
+
+  virtual void update_response_current_limiting(size_t uwl) = 0;
 
  private:
   size_t code;
@@ -96,16 +110,19 @@ class RpcServer {
 
   net::awaitable<HandleInfo> HandleRequest(net::io_context& io, net::ip::tcp::socket socket) {
     HandleInfo handle_info;
-
     ClientToServerStream<void> ctss;
     ctss.update_bind_socket(&socket);
-    auto request_view = co_await ctss.Read();
+    std::string buf;
+    auto request_view = co_await ctss.Read(buf);
     auto processor = GetProcessor(ctss.get_pcode());
     handle_info.pcode = ctss.get_pcode();
     if (processor == nullptr) {
       handle_info.ret_code = RPC_INVALID_PCODE;
       handle_info.err_msg = "not found rpc request, pcode == " + std::to_string(handle_info.pcode);
     } else {
+      // 设置socket限流
+      processor->update_request_current_limiting(processor->get_request_current_limiting());
+      processor->update_response_current_limiting(processor->get_response_current_limiting());
       // 在调用bind_io_context之前解析请求，这意味着可以根据请求信息做更细粒度的分流。
       processor->create_request_from_raw_bytes(request_view, ctss.get_eof());
       processor->bind_net(socket, io);
@@ -173,7 +190,15 @@ class RpcProcessor : public RpcProcessorBase {
     request_stream.update_bind_socket(&s);
     response_stream.update_bind_socket(&s);
     set_io_context(io_context);
-  }  
+  }
+
+  void update_request_current_limiting(size_t uwl) override {
+    request_stream.update_read_limiting(uwl);
+  }
+
+  void update_response_current_limiting(size_t uwl) override {
+    response_stream.update_write_limiting(uwl);
+  }
 
  public:
   static constexpr uint32_t pcode = c;

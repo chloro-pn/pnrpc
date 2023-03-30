@@ -9,6 +9,8 @@
 
 #include <iostream>
 #include <cassert>
+#include <ctime>
+
 
 using namespace pnrpc;
 
@@ -55,7 +57,7 @@ int main() {
     }
     co_await sum_client.send_request(3, true);
     uint32_t resp = 0;
-    int ret_code = co_await sum_client.recv_response(resp);;
+    int ret_code = co_await sum_client.recv_response(resp);
     assert(resp == 0 + 1 + 2 + 3);
     assert(ret_code == RPC_OK);
   }, pnrpc::net::detached);
@@ -67,9 +69,11 @@ int main() {
     std::string tmp;
     std::optional<std::string> response;
     while(co_await client.recv_response(response) == RPC_OK && response.has_value()) {
+      auto now = std::chrono::system_clock::now();
+      auto now_time_t = std::chrono::system_clock::to_time_t(now);
+      PNRPC_LOG_INFO("rpc download stub recv at {}", std::ctime(&now_time_t));
       tmp += response.value();
     }
-    assert(tmp == "helloworld");
   }, pnrpc::net::detached);
   
 

@@ -24,6 +24,12 @@ class RPC ## funcname ## STUB : public pnrpc::RpcStub<request_t, response_t, pco
 #define OVERRIDE_RESTRICTOR \
   bool restrictor() override;
 
+#define OVERRIDE_REQUEST_LIMIT \
+  size_t get_request_current_limiting() override;
+
+#define OVERRIDE_RESPONSE_LIMIT \
+  size_t get_response_current_limiting() override;
+
 #define RPC_DECLARE(funcname, request_t, response_t, pcode, rpc_type, ...) \
   RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, rpc_type, __VA_ARGS__)
 
