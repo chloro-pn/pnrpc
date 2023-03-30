@@ -1,21 +1,21 @@
 #pragma once
 
+#include <cassert>
+#include <chrono>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
+
+#include "pnrpc/asio_version.h"
+#include "pnrpc/current_limiting.h"
+#include "pnrpc/exception.h"
+#include "pnrpc/log.h"
+#include "pnrpc/packager.h"
 #include "pnrpc/rpc_concept.h"
 #include "pnrpc/rpc_type_creator.h"
 #include "pnrpc/util.h"
-#include "pnrpc/packager.h"
-#include "pnrpc/log.h"
-#include "pnrpc/exception.h"
-#include "pnrpc/asio_version.h"
-#include "pnrpc/current_limiting.h"
-
-#include <memory>
-#include <cassert>
-#include <string>
-#include <string_view>
-#include <optional>
-#include <chrono>
-#include <thread>
 
 namespace pnrpc {
 
@@ -29,21 +29,13 @@ namespace pnrpc {
  */
 class StreamBase {
  public:
-  StreamBase() : socket_(nullptr), write_bytes_(0), read_bytes_(0) {
+  StreamBase() : socket_(nullptr), write_bytes_(0), read_bytes_(0) {}
 
-  }
+  void update_bind_socket(net::ip::tcp::socket* s) { socket_ = s; }
 
-  void update_bind_socket(net::ip::tcp::socket* s) {
-    socket_ = s;
-  }
+  void update_read_limiting(size_t up_water) { read_limiting_.update_up_water_level(up_water); }
 
-  void update_read_limiting(size_t up_water) {
-    read_limiting_.update_up_water_level(up_water);
-  }
-
-  void update_write_limiting(size_t up_water) {
-    write_limiting_.update_up_water_level(up_water);
-  }
+  void update_write_limiting(size_t up_water) { write_limiting_.update_up_water_level(up_water); }
 
  protected:
   net::awaitable<void> coro_send(const std::string& buf) {
@@ -125,12 +117,11 @@ class StreamBase {
   CurrentLimiting write_limiting_;
 };
 
-template <typename RpcType> requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value
-class ClientToServerStream : public StreamBase {
+template <typename RpcType>
+requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value class ClientToServerStream : public StreamBase {
  public:
-  explicit ClientToServerStream(uint32_t pcode) : StreamBase(), set_init_package_(false), pcode_(pcode), read_eof_(false), send_eof_(false) {
-
-  }
+  explicit ClientToServerStream(uint32_t pcode)
+      : StreamBase(), set_init_package_(false), pcode_(pcode), read_eof_(false), send_eof_(false) {}
 
   net::awaitable<void> Send(const RpcType& package, bool eof) {
     if (send_eof_ == true) {
@@ -189,13 +180,9 @@ class ClientToServerStream : public StreamBase {
     return pkg;
   }
 
-  uint32_t get_pcode() const {
-    return pcode_;
-  }
+  uint32_t get_pcode() const { return pcode_; }
 
-  bool get_eof() const {
-    return read_eof_;
-  }
+  bool get_eof() const { return read_eof_; }
 
   void set_init_package(RpcType&& package, bool eof) {
     pkg_ = std::move(package);
@@ -214,9 +201,7 @@ class ClientToServerStream : public StreamBase {
 template <>
 class ClientToServerStream<void> : public StreamBase {
  public:
-  explicit ClientToServerStream() : StreamBase(), pcode_(0), eof_(false) {
-
-  }
+  explicit ClientToServerStream() : StreamBase(), pcode_(0), eof_(false) {}
 
   net::awaitable<std::string_view> Read(std::string& buf) {
     buf = co_await coro_recv();
@@ -224,25 +209,20 @@ class ClientToServerStream<void> : public StreamBase {
     co_return rp.parse_request_package(buf, pcode_, eof_);
   }
 
-  uint32_t get_pcode() const {
-    return pcode_;
-  }
+  uint32_t get_pcode() const { return pcode_; }
 
-  bool get_eof() const {
-    return eof_;
-  }
+  bool get_eof() const { return eof_; }
 
  private:
   uint32_t pcode_;
   bool eof_;
 };
 
-template <typename RpcType> requires RpcTypeConcept<RpcType>
+template <typename RpcType>
+requires RpcTypeConcept<RpcType>
 class ServerToClientStream : public StreamBase {
  public:
-  explicit ServerToClientStream() : StreamBase(), read_eof_(false), send_eof_(false) {
-
-  }
+  explicit ServerToClientStream() : StreamBase(), read_eof_(false), send_eof_(false) {}
 
   net::awaitable<void> Send(const RpcType& package, uint32_t ret_code, bool eof) {
     if (send_eof_ == true) {
@@ -303,9 +283,7 @@ class ServerToClientStream : public StreamBase {
 
 class ErrorStream : public StreamBase {
  public:
-  explicit ErrorStream() : StreamBase() {
-
-  }
+  explicit ErrorStream() : StreamBase() {}
 
   net::awaitable<void> SendErrorMsg(const std::string& err_msg, uint32_t ret_code) {
     std::string buf;
@@ -315,4 +293,4 @@ class ErrorStream : public StreamBase {
     co_return;
   }
 };
-}
+}  // namespace pnrpc

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "pnrpc/rpc_declare.h"
 #include "bridge/object.h"
+#include "pnrpc/rpc_declare.h"
 
 struct MysqlRequestRpcT {
   static MysqlRequestRpcT create_from_raw_bytes(const char* ptr, size_t len) {

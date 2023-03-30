@@ -1,8 +1,9 @@
 #include "pnrpc/current_limiting.h"
 
-#include "gtest/gtest.h"
-#include <thread>
 #include <chrono>
+#include <thread>
+
+#include "gtest/gtest.h"
 
 TEST(current_limiting, all) {
   pnrpc::CurrentLimiting cl;

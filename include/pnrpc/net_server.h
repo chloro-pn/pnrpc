@@ -1,23 +1,23 @@
 #pragma once
 
-#include "pnrpc/asio_version.h"
-#include "pnrpc/rpc_server.h"
-#include "pnrpc/util.h"
-#include "pnrpc/log.h"
-#include "pnrpc/rebind_ctx.h"
-#include "pnrpc/exception.h"
-
 #include <exception>
 #include <string>
-#include <vector>
 #include <thread>
+#include <vector>
+
+#include "pnrpc/asio_version.h"
+#include "pnrpc/exception.h"
+#include "pnrpc/log.h"
+#include "pnrpc/rebind_ctx.h"
+#include "pnrpc/rpc_server.h"
+#include "pnrpc/util.h"
 
 namespace pnrpc {
 
 net::awaitable<void> work(net::ip::tcp::socket socket, net::io_context& io);
 
-
-net::awaitable<void> listener(const std::string& ip, uint16_t port, net::io_context& io, std::vector<std::unique_ptr<net::io_context>>& handle_io);
+net::awaitable<void> listener(const std::string& ip, uint16_t port, net::io_context& io,
+                              std::vector<std::unique_ptr<net::io_context>>& handle_io);
 
 class NetServer {
  public:
@@ -35,19 +35,17 @@ class NetServer {
   }
 
   void stop() {
-    for(auto& each : handle_io_) {
+    for (auto& each : handle_io_) {
       each->stop();
     }
-    for(auto& each : handle_thread_) {
+    for (auto& each : handle_thread_) {
       each.join();
     }
     // 需要等所有handle_io_ stop之后io_才可以stop.
     io_.stop();
   }
 
-  ~NetServer() {
-    
-  }
+  ~NetServer() {}
 
  private:
   net::io_context io_;
@@ -57,4 +55,4 @@ class NetServer {
   uint16_t port_;
 };
 
-}
+}  // namespace pnrpc

@@ -11,4 +11,4 @@ inline net::ip::tcp::socket rebind_ctx(net::ip::tcp::socket s, net::io_context& 
   return s2;
 }
 
-}
+}  // namespace pnrpc

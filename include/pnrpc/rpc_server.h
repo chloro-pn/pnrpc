@@ -1,23 +1,23 @@
 #pragma once
 
+#include <cassert>
 #include <cstdint>
-#include <unordered_map>
-#include <memory>
 #include <functional>
-#include <vector>
+#include <memory>
 #include <string>
 #include <string_view>
-#include <cassert>
+#include <unordered_map>
+#include <vector>
 
-#include "pnrpc/rpc_concept.h"
-#include "pnrpc/rpc_ret_code.h"
-#include "pnrpc/util.h"
-#include "pnrpc/log.h"
-#include "pnrpc/rebind_ctx.h"
-#include "pnrpc/rpc_type_creator.h"
-#include "pnrpc/stream.h"
 #include "bridge/object.h"
 #include "pnrpc/asio_version.h"
+#include "pnrpc/log.h"
+#include "pnrpc/rebind_ctx.h"
+#include "pnrpc/rpc_concept.h"
+#include "pnrpc/rpc_ret_code.h"
+#include "pnrpc/rpc_type_creator.h"
+#include "pnrpc/stream.h"
+#include "pnrpc/util.h"
 
 namespace pnrpc {
 
@@ -28,9 +28,7 @@ class RpcProcessorBase {
   friend class RpcServer;
 
  public:
-  RpcProcessorBase(size_t pcode, RpcType rt) : code(pcode), rpc_type_(rt), running_io_(nullptr) {
-
-  }
+  RpcProcessorBase(size_t pcode, RpcType rt) : code(pcode), rpc_type_(rt), running_io_(nullptr) {}
 
   net::io_context& get_io_context() {
     assert(running_io_ != nullptr);
@@ -42,9 +40,7 @@ class RpcProcessorBase {
   RpcType get_rpc_type() const { return rpc_type_; }
 
  protected:
-  void set_io_context(net::io_context& io) {
-    running_io_ = &io;
-  }
+  void set_io_context(net::io_context& io) { running_io_ = &io; }
 
   virtual void create_request_from_raw_bytes(std::string_view request_view, bool eof) = 0;
 
@@ -53,25 +49,17 @@ class RpcProcessorBase {
   virtual void bind_net(net::ip::tcp::socket& s, net::io_context& io_context) = 0;
 
   // 用户可以通过重写此方法将本rpc分配给自定义的handle_io处理
-  virtual net::io_context* bind_io_context() {
-    return nullptr;
-  }
+  virtual net::io_context* bind_io_context() { return nullptr; }
 
   // 用户可以通过重写此方法对从客户端读取数据做限流, 单位 字节 / 秒
-  virtual size_t get_request_current_limiting() {
-    return 0;
-  }
+  virtual size_t get_request_current_limiting() { return 0; }
 
   // 用户可以通过重写此方法对向客户端写回数据做限流, 单位 字节 / 秒
-  virtual size_t get_response_current_limiting() {
-    return 0;
-  }
+  virtual size_t get_response_current_limiting() { return 0; }
 
   // 用户可以通过重写此方法实现限流算法。注意：
   // 每个RpcProcessorBase对象只负责处理一次rpc请求，因此需要将限流信息存储在生命周期更长的对象中而不是RpcProcessorBase对象中。
-  virtual bool restrictor() {
-    return true;
-  }
+  virtual bool restrictor() { return true; }
 
   virtual void update_request_current_limiting(size_t uwl) = 0;
 
@@ -173,7 +161,8 @@ class RpcServer {
   RpcServer() {}
 };
 
-template <typename RequestType, typename ResponseType, uint32_t c, RpcType rpc_type> requires RpcTypeConcept<RequestType> && RpcTypeConcept<ResponseType>
+template <typename RequestType, typename ResponseType, uint32_t c, RpcType rpc_type>
+requires RpcTypeConcept<RequestType> && RpcTypeConcept<ResponseType>
 class RpcProcessor : public RpcProcessorBase {
   using request_t = RequestType;
   using response_t = ResponseType;
@@ -192,18 +181,20 @@ class RpcProcessor : public RpcProcessorBase {
     set_io_context(io_context);
   }
 
-  void update_request_current_limiting(size_t uwl) override {
-    request_stream.update_read_limiting(uwl);
-  }
+  void update_request_current_limiting(size_t uwl) override { request_stream.update_read_limiting(uwl); }
 
-  void update_response_current_limiting(size_t uwl) override {
-    response_stream.update_write_limiting(uwl);
-  }
+  void update_response_current_limiting(size_t uwl) override { response_stream.update_write_limiting(uwl); }
 
  public:
   static constexpr uint32_t pcode = c;
 
-  explicit RpcProcessor() : RpcProcessorBase(pcode, rpc_type), request_stream(pcode), response_stream(), request_count_(0), response_eof_(false), response_count_(0) {}
+  explicit RpcProcessor()
+      : RpcProcessorBase(pcode, rpc_type),
+        request_stream(pcode),
+        response_stream(),
+        request_count_(0),
+        response_eof_(false),
+        response_count_(0) {}
 
   net::awaitable<std::optional<request_t>> get_request_arg() {
     if (get_rpc_type() == RpcType::Simple || get_rpc_type() == RpcType::ServerSideStream) {
@@ -239,13 +230,9 @@ class RpcProcessor : public RpcProcessorBase {
   }
 
  protected:
-  ClientToServerStream<request_t>& get_request_stream() {
-    return request_stream;
-  }
+  ClientToServerStream<request_t>& get_request_stream() { return request_stream; }
 
-  ServerToClientStream<response_t>& get_response_stream() {
-    return response_stream;
-  }
+  ServerToClientStream<response_t>& get_response_stream() { return response_stream; }
 
  private:
   ClientToServerStream<request_t> request_stream;
@@ -258,4 +245,4 @@ class RpcProcessor : public RpcProcessorBase {
   size_t response_count_;
 };
 
-}
+}  // namespace pnrpc

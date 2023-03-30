@@ -1,6 +1,8 @@
 #pragma once
 
-#include "pnrpc/rpc_declare.h"
 #include <string>
 
-RPC_DECLARE(Download, std::string, std::string, 0x05, pnrpc::RpcType::ServerSideStream, OVERRIDE_PROCESS OVERRIDE_RESPONSE_LIMIT)
+#include "pnrpc/rpc_declare.h"
+
+RPC_DECLARE(Download, std::string, std::string, 0x05, pnrpc::RpcType::ServerSideStream,
+            OVERRIDE_PROCESS OVERRIDE_RESPONSE_LIMIT)

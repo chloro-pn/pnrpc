@@ -7,9 +7,7 @@ namespace pnrpc {
 
 class PnrpcException : public std::exception {
  public:
-  explicit PnrpcException(const std::string& w) : what_(w) {
-
-  }
+  explicit PnrpcException(const std::string& w) : what_(w) {}
 
   const char* what() const noexcept override {
     if (what_.empty()) {
@@ -22,4 +20,4 @@ class PnrpcException : public std::exception {
   std::string what_;
 };
 
-}
+}  // namespace pnrpc

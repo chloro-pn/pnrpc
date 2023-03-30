@@ -1,4 +1,5 @@
 #include "mysql_request.h"
+
 #include "boost/mysql.hpp"
 
 pnrpc::net::awaitable<void> RPCMysqlRequest::process() {

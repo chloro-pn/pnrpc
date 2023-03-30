@@ -1,7 +1,7 @@
-#include "gtest/gtest.h"
-
 #include "boost/mysql.hpp"
+
 #include "boost/asio.hpp"
+#include "gtest/gtest.h"
 
 TEST(mysql, all) {
   boost::asio::io_context ctx;

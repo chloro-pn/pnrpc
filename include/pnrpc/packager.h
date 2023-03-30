@@ -1,21 +1,20 @@
-#pragma once 
+#pragma once
 
-#include <string>
 #include <memory>
+#include <string>
 #include <string_view>
 
-#include "pnrpc/util.h"
-#include "pnrpc/rpc_type_creator.h"
+#include "bridge/object.h"
 #include "pnrpc/log.h"
 #include "pnrpc/rpc_ret_code.h"
-
-#include "bridge/object.h"
+#include "pnrpc/rpc_type_creator.h"
+#include "pnrpc/util.h"
 
 namespace pnrpc {
 
-template<typename RpcType>
+template <typename RpcType>
 class RequestPackager {
- public:  
+ public:
   void seri_request_package(const RpcType& package, std::string& appender, uint32_t pcode, bool eof) {
     pcodeSeri(pcode, appender);
     eofSeri(eof, appender);
@@ -44,10 +43,9 @@ class RequestPackager<void> {
     std::string_view request_view(ptr, buf_len);
     return request_view;
   }
-
 };
 
-template<typename RpcType>
+template <typename RpcType>
 class ResponsePackager {
  public:
   void seri_response_package(const RpcType& package, std::string& appender, uint32_t ret_code, bool eof) {
@@ -101,4 +99,4 @@ class ResponsePackager<void> {
   }
 };
 
-}
+}  // namespace pnrpc

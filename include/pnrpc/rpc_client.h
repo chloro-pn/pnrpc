@@ -1,34 +1,30 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <optional>
+#include <string>
 
-#include "pnrpc/log.h"
-#include "pnrpc/stream.h"
-#include "pnrpc/rpc_concept.h"
-#include "pnrpc/util.h"
-#include "pnrpc/rpc_ret_code.h"
 #include "pnrpc/asio_version.h"
+#include "pnrpc/log.h"
+#include "pnrpc/rpc_concept.h"
+#include "pnrpc/rpc_ret_code.h"
+#include "pnrpc/stream.h"
+#include "pnrpc/util.h"
 
 namespace pnrpc {
 
-
-template <typename RequestType, typename ResponseType, uint32_t pcode> requires RpcTypeConcept<RequestType> && RpcTypeConcept<ResponseType>
+template <typename RequestType, typename ResponseType, uint32_t pcode>
+requires RpcTypeConcept<RequestType> && RpcTypeConcept<ResponseType>
 class RpcStubBase {
  public:
-   using request_t = RequestType;
-   using response_t = ResponseType;
+  using request_t = RequestType;
+  using response_t = ResponseType;
 
-   RpcStubBase(net::io_context& io, const std::string& ip, uint16_t port) : io_(io),
-                                                                             socket_(io_),
-                                                                             ip_(ip),
-                                                                             port_(port),
-                                                                             request_stream(pcode),
-                                                                             response_stream() {
+  RpcStubBase(net::io_context& io, const std::string& ip, uint16_t port)
+      : io_(io), socket_(io_), ip_(ip), port_(port), request_stream(pcode), response_stream() {
     request_stream.update_bind_socket(&socket_);
     response_stream.update_bind_socket(&socket_);
-   }
+  }
 
   net::awaitable<net::ip::tcp::endpoint> async_connect() {
     net::ip::tcp::resolver resolver(io_);
@@ -59,7 +55,8 @@ class RpcStub : public RpcStubBase<RequestType, ResponseType, pcode> {
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
 
-  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port) {}
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port)
+      : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port) {}
 
   net::awaitable<int> rpc_call_coro(const request_t& r, response_t& response) {
     co_await this->request_stream.Send(r, true);
@@ -95,12 +92,14 @@ class RpcStub : public RpcStubBase<RequestType, ResponseType, pcode> {
 };
 
 template <typename RequestType, typename ResponseType, uint32_t pcode>
-class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : public RpcStubBase<RequestType, ResponseType, pcode> {
+class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream>
+    : public RpcStubBase<RequestType, ResponseType, pcode> {
  public:
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
 
-  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false), recved_(false) {}
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port)
+      : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false), recved_(false) {}
 
   net::awaitable<int> send_request(const request_t& request, bool eof = false) {
     if (send_eof_ == true) {
@@ -122,7 +121,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
 
   net::awaitable<int> recv_response(response_t& response) {
     if (send_eof_ == false) {
-      co_return  RPC_RECV_BEFORE_EOF;
+      co_return RPC_RECV_BEFORE_EOF;
     }
     if (recved_ == true) {
       co_return RPC_RECV_DUPLICATE;
@@ -143,7 +142,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
 
   int recv_response_sync(response_t& response) {
     if (send_eof_ == false) {
-      return  RPC_RECV_BEFORE_EOF;
+      return RPC_RECV_BEFORE_EOF;
     }
     if (recved_ == true) {
       return RPC_RECV_DUPLICATE;
@@ -168,12 +167,14 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ClientSideStream> : pub
 };
 
 template <typename RequestType, typename ResponseType, uint32_t pcode>
-class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : public RpcStubBase<RequestType, ResponseType, pcode> {
+class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream>
+    : public RpcStubBase<RequestType, ResponseType, pcode> {
  public:
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
-  
-  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
+
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port)
+      : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
 
   net::awaitable<int> send_request(const request_t& request) {
     if (send_eof_ == true) {
@@ -195,7 +196,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
 
   net::awaitable<int> recv_response(std::optional<response_t>& response) {
     if (send_eof_ == false) {
-      co_return  RPC_RECV_BEFORE_EOF;
+      co_return RPC_RECV_BEFORE_EOF;
     }
     uint32_t ret_code = 0;
     std::string err_msg;
@@ -208,7 +209,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
 
   int recv_response_sync(std::optional<response_t>& response) {
     if (send_eof_ == false) {
-      return  RPC_RECV_BEFORE_EOF;
+      return RPC_RECV_BEFORE_EOF;
     }
     uint32_t ret_code = 0;
     std::string err_msg;
@@ -224,12 +225,14 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::ServerSideStream> : pub
 };
 
 template <typename RequestType, typename ResponseType, uint32_t pcode>
-class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : public RpcStubBase<RequestType, ResponseType, pcode> {
+class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream>
+    : public RpcStubBase<RequestType, ResponseType, pcode> {
  public:
   using request_t = typename RpcStubBase<RequestType, ResponseType, pcode>::request_t;
   using response_t = typename RpcStubBase<RequestType, ResponseType, pcode>::response_t;
 
-  RpcStub(net::io_context& io, const std::string& ip, uint16_t port) : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
+  RpcStub(net::io_context& io, const std::string& ip, uint16_t port)
+      : RpcStubBase<RequestType, ResponseType, pcode>(io, ip, port), send_eof_(false) {}
 
   net::awaitable<int> send_request(const request_t& request, bool eof = false) {
     if (send_eof_ == true) {
@@ -251,7 +254,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : publi
 
   net::awaitable<int> recv_response(std::optional<response_t>& response) {
     if (send_eof_ == false) {
-      co_return  RPC_RECV_BEFORE_EOF;
+      co_return RPC_RECV_BEFORE_EOF;
     }
     uint32_t ret_code = 0;
     std::string err_msg;
@@ -264,7 +267,7 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : publi
 
   int recv_response_sync(std::optional<response_t>& response) {
     if (send_eof_ == false) {
-      return  RPC_RECV_BEFORE_EOF;
+      return RPC_RECV_BEFORE_EOF;
     }
     uint32_t ret_code = 0;
     std::string err_msg;
@@ -279,4 +282,4 @@ class RpcStub<RequestType, ResponseType, pcode, RpcType::BidirectStream> : publi
   bool send_eof_;
 };
 
-}
+}  // namespace pnrpc

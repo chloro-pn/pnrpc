@@ -1,9 +1,9 @@
 #pragma once
 
-#include <string>
+#include <chrono>
 #include <cstring>
 #include <stdexcept>
-#include <chrono>
+#include <string>
 
 #include "pnrpc/exception.h"
 
@@ -19,7 +19,7 @@ enum class RpcType : uint8_t {
 // 16MB
 constexpr size_t max_package_size = 16 * 1024 * 1024;
 
-}
+}  // namespace pnrpc
 
 class Endian {
  public:
@@ -88,13 +88,11 @@ T integralParse(const char* ptr, size_t buf_len) {
 }
 
 template <typename T>
-T integralParse(char(&buf)[sizeof(T)]) {
+T integralParse(char (&buf)[sizeof(T)]) {
   return integralParse<T>(&buf[0], sizeof(T));
 }
 
-inline void pcodeSeri(uint32_t pcode, std::string& appender) {
-  integralSeri<uint32_t>(pcode, appender);
-}
+inline void pcodeSeri(uint32_t pcode, std::string& appender) { integralSeri<uint32_t>(pcode, appender); }
 
 inline uint32_t ParsePcode(const char*& ptr, size_t& len) {
   auto pcode = integralParse<uint32_t>(ptr, len);

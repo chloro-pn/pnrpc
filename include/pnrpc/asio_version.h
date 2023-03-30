@@ -17,11 +17,11 @@ namespace pnrpc {
 namespace net = ::boost::asio;
 using system_error = ::boost::system::system_error;
 
-#else 
+#else
 
 namespace net = ::asio;
 using system_error = ::asio::system_error;
 
 #endif
 
-}
+}  // namespace pnrpc

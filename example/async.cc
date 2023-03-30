@@ -1,15 +1,15 @@
 #include "async.h"
-#include "echo.h"
 
+#include <atomic>
+#include <cassert>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <thread>
-#include <atomic>
-#include <mutex>
-#include <vector>
-#include <cassert>
 #include <variant>
+#include <vector>
 
+#include "echo.h"
 #include "pnrpc/asio_version.h"
 
 using namespace pnrpc::net::experimental::awaitable_operators;
@@ -19,7 +19,7 @@ struct AsyncTaskHandlerMock {
 
   AsyncTaskHandlerMock() : stop_(false) {
     backend_ = std::thread([this]() {
-      while(stop_.load() == false) {
+      while (stop_.load() == false) {
         std::vector<call_back_t> cbs;
         std::vector<std::string> args;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -28,7 +28,7 @@ struct AsyncTaskHandlerMock {
         args_.swap(args);
         mut_.unlock();
         assert(cbs.size() == args.size());
-        for(size_t i = 0; i < cbs.size(); ++i) {
+        for (size_t i = 0; i < cbs.size(); ++i) {
           cbs[i](args[i]);
         }
       }
@@ -67,9 +67,8 @@ pnrpc::net::awaitable<void> RPCAsync::process() {
 
   std::string resp;
   std::variant<int, std::monostate> results = co_await (
-    echo_client.rpc_call_coro("hello world", resp)
-    || pnrpc::net::steady_timer(get_io_context(), std::chrono::seconds(2)).async_wait(pnrpc::net::use_awaitable)
-  );
+      echo_client.rpc_call_coro("hello world", resp) ||
+      pnrpc::net::steady_timer(get_io_context(), std::chrono::seconds(2)).async_wait(pnrpc::net::use_awaitable));
   if (results.index() == 0 && std::get<0>(results) == RPC_OK) {
     response = response + ", " + resp;
   }

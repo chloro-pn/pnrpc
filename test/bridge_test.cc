@@ -1,6 +1,5 @@
 #include "bridge/adaptor.h"
 #include "bridge/object.h"
-
 #include "gtest/gtest.h"
 
 TEST(bridge, all) {
