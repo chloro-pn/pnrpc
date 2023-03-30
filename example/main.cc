@@ -6,7 +6,7 @@
 #include "async.h"
 #include "sum_stream.h"
 #include "download.h"
-
+#include "mysql_request.h"
 #include <iostream>
 #include <cassert>
 #include <ctime>
@@ -21,6 +21,7 @@ int main() {
   REGISTER_RPC(Async)
   REGISTER_RPC(SumStream)
   REGISTER_RPC(Download)
+  REGISTER_RPC(MysqlRequest)
 
   NetServer ns("127.0.0.1", 44444, 4);
   std::thread th([&]() {
@@ -76,6 +77,17 @@ int main() {
     }
   }, pnrpc::net::detached);
   
+  pnrpc::net::co_spawn(io, [&io]() -> pnrpc::net::awaitable<void> {
+    RPCMysqlRequestSTUB client(io, "127.0.0.1", 44444);
+    co_await client.async_connect();
+    MysqlRequestRpcT req;
+    req.user_name = "pn";
+    req.password = "123456";
+    req.db_name = "test";
+    std::string resp;
+    assert(co_await client.rpc_call_coro(req, resp) == RPC_OK);
+    assert(resp == "Hello World!");
+  }, pnrpc::net::detached);
 
   io.run();
   io.stop();

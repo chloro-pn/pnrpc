@@ -28,45 +28,29 @@ cc_binary(
   srcs = glob(["example/*.cc", "example/*.h"]),
   deps = [
     ":pnrpc",
+    "@mysql//:mysql",
   ],
   includes = ["example"]
 )
 
 cc_binary(
   name = "redis_client",
-  srcs = select(
-    {
-      "//bazel_config:pnrpc_use_boost_redis" : glob(["example/redis/*.cc", "example/redis/*.h"], ["example/redis/main.cc"]),
-      "//conditions:default" : ["example/redis/main.cc"],
-    }
-  ),
-  deps = select(
-    {
-      "//bazel_config:pnrpc_use_boost_redis" : ["@redis//:redis"],
-      "//conditions:default" : [],
-    }
-  ),
+  srcs = glob(["example/redis/*.cc", "example/redis/*.h"]),
+  deps = [
+    "@redis//:redis",
+  ],
   includes = ["example/redis"],
 )
 
 cc_test(
   name = "test",
-  srcs = glob(["test/*.cc", "test/*.h"], exclude = ["test/mysql_test.cc"]) + select(
-    {
-      "//bazel_config:pnrpc_use_boost_mysql" : ["test/mysql_test.cc"],
-      "//conditions:default" : [],
-    }
-  ),
+  srcs = glob(["test/*.cc", "test/*.h"]),
   includes = ["test"],
   deps = [
     ":pnrpc",
+    "@mysql//:mysql",
     "@bridge//:bridge",
     "@googletest//:gtest",
     "@googletest//:gtest_main",
-  ] + select(
-    {
-      "//bazel_config:pnrpc_use_boost_mysql" : ["@mysql//:mysql"],
-      "//conditions:default" : [],
-    }
-  )
+  ]
 )
