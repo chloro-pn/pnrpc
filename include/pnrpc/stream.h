@@ -121,7 +121,7 @@ template <typename RpcType>
 requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value class ClientToServerStream : public StreamBase {
  public:
   explicit ClientToServerStream(uint32_t pcode)
-      : StreamBase(), set_init_package_(false), pcode_(pcode), read_eof_(false), send_eof_(false) {}
+      : StreamBase(), pcode_(pcode), read_eof_(false), send_eof_(false) {}
 
   net::awaitable<void> Send(const RpcType& package, bool eof) {
     if (send_eof_ == true) {
@@ -149,10 +149,6 @@ requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value class ClientToS
   }
 
   net::awaitable<std::optional<RpcType>> Read() {
-    if (set_init_package_ == true) {
-      set_init_package_ = false;
-      co_return std::move(pkg_);
-    }
     if (read_eof_ == true) {
       co_return std::optional<RpcType>();
     }
@@ -164,11 +160,7 @@ requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value class ClientToS
     co_return pkg;
   }
 
-  std::optional<RpcType> ReadSync() {
-    if (set_init_package_ == true) {
-      set_init_package_ = false;
-      return std::move(pkg_);
-    }
+  std::optional<RpcType> ReadSync() {  
     if (read_eof_ == true) {
       return std::optional<RpcType>();
     }
@@ -184,15 +176,7 @@ requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value class ClientToS
 
   bool get_eof() const { return read_eof_; }
 
-  void set_init_package(RpcType&& package, bool eof) {
-    pkg_ = std::move(package);
-    set_init_package_ = true;
-    read_eof_ = eof;
-  }
-
  private:
-  RpcType pkg_;
-  bool set_init_package_;
   uint32_t pcode_;
   bool read_eof_;
   bool send_eof_;

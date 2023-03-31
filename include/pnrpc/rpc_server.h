@@ -170,7 +170,8 @@ class RpcProcessor : public RpcProcessorBase {
  protected:
   void create_request_from_raw_bytes(std::string_view request_view, bool eof) override {
     auto request = RpcCreator<request_t>::create(&request_view[0], request_view.size());
-    request_stream.set_init_package(std::move(request), eof);
+    first_requset_pkg_.reset(new request_t(std::move(request)));
+    first_read_eof_ = eof;
   }
 
   virtual net::awaitable<void> process() = 0;
@@ -194,7 +195,9 @@ class RpcProcessor : public RpcProcessorBase {
         response_stream(),
         request_count_(0),
         response_eof_(false),
-        response_count_(0) {}
+        response_count_(0),
+        first_requset_pkg_(nullptr),
+        first_read_eof_(false) {}
 
   net::awaitable<std::optional<request_t>> get_request_arg() {
     if (get_rpc_type() == RpcType::Simple || get_rpc_type() == RpcType::ServerSideStream) {
@@ -204,6 +207,13 @@ class RpcProcessor : public RpcProcessorBase {
       }
     }
     request_count_ += 1;
+    if (first_requset_pkg_ != nullptr) {
+      auto tmp = std::move(first_requset_pkg_);
+      co_return std::optional<request_t>(std::move(*tmp));
+    }
+    if (first_read_eof_ == true) {
+      co_return std::optional<request_t>();
+    }
     co_return co_await get_request_stream().Read();
   }
 
@@ -243,6 +253,9 @@ class RpcProcessor : public RpcProcessorBase {
   bool response_eof_;
   // 发送回复包的个数
   size_t response_count_;
+
+  std::unique_ptr<request_t> first_requset_pkg_;
+  bool first_read_eof_;
 };
 
 }  // namespace pnrpc
