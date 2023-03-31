@@ -49,6 +49,8 @@ enum class RpcType : uint8_t {
   * OVERRIDE_PROCESS 重载rpc处理函数，一般情况这个是必须指定的
   * OVERRIDE_BIND 重载网络绑定函数，用户可以通过重载这个函数将rpc接口的执行绑定到自定义的io_context上
   * OVERRIDE_RESTRICTOR 重载限流器函数，用户可以通过重载这个函数为rpc接口绑定限流器
+  * OVERRIDE_REQUEST_LIMIT 设置客户端到服务器方向socket的限流策略，单位字节/秒
+  * OVERRIDE_RESPONSE_LIMIT 设置服务器到客户端方向socket的限流策略，单位字节/秒
 
 ##### rpc定义
 声明之后，需要为rpc接口定制的功能提供定义，如果定制了OVERRIDE_PROCESS（参考example/echo的例子）：
