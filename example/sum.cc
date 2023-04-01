@@ -12,7 +12,8 @@ pnrpc::net::awaitable<void> RPCSum::process() {
   co_return;
 }
 
-bool RPCSum::restrictor() {
+bool RPCSum::restrictor(void* pkg) {
+  const RpcSumRequestT& req = cast_to_request_pkg(pkg);
   // 设置令牌桶的令牌入桶速率为100/s，容量为100
   static TokenBucket tb(10000, 100000);
   return tb.consume(1);

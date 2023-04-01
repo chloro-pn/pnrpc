@@ -11,4 +11,4 @@ pnrpc::net::awaitable<void> RPCDownload::process() {
 }
 
 // 设置写回客户端的速率不超过1024字节/秒
-size_t RPCDownload::get_response_current_limiting() { return 1024; }
+size_t RPCDownload::get_response_current_limiting(void* pkg) { return 1024; }

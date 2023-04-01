@@ -120,8 +120,7 @@ class StreamBase {
 template <typename RpcType>
 requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value class ClientToServerStream : public StreamBase {
  public:
-  explicit ClientToServerStream(uint32_t pcode)
-      : StreamBase(), pcode_(pcode), read_eof_(false), send_eof_(false) {}
+  explicit ClientToServerStream(uint32_t pcode) : StreamBase(), pcode_(pcode), read_eof_(false), send_eof_(false) {}
 
   net::awaitable<void> Send(const RpcType& package, bool eof) {
     if (send_eof_ == true) {
@@ -160,7 +159,7 @@ requires RpcTypeConcept<RpcType> || std::is_void<RpcType>::value class ClientToS
     co_return pkg;
   }
 
-  std::optional<RpcType> ReadSync() {  
+  std::optional<RpcType> ReadSync() {
     if (read_eof_ == true) {
       return std::optional<RpcType>();
     }

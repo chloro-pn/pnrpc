@@ -16,15 +16,15 @@
         : pnrpc::RpcStub<request_t, response_t, pcode, rpc_type>(io, ip, port) {}             \
   };
 
-#define OVERRIDE_BIND pnrpc::net::io_context* bind_io_context() override;
+#define OVERRIDE_BIND pnrpc::net::io_context* bind_io_context(void*) override;
 
 #define OVERRIDE_PROCESS pnrpc::net::awaitable<void> process() override;
 
-#define OVERRIDE_RESTRICTOR bool restrictor() override;
+#define OVERRIDE_RESTRICTOR bool restrictor(void*) override;
 
-#define OVERRIDE_REQUEST_LIMIT size_t get_request_current_limiting() override;
+#define OVERRIDE_REQUEST_LIMIT size_t get_request_current_limiting(void*) override;
 
-#define OVERRIDE_RESPONSE_LIMIT size_t get_response_current_limiting() override;
+#define OVERRIDE_RESPONSE_LIMIT size_t get_response_current_limiting(void*) override;
 
 #define RPC_DECLARE(funcname, request_t, response_t, pcode, rpc_type, ...) \
   RPC_DECLARE_INNER(funcname, request_t, response_t, pcode, rpc_type, __VA_ARGS__)
